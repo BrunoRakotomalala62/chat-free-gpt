@@ -1,17 +1,21 @@
 /**
  * GET /api/chat?prompt=bonjour&model=gpt-5.6-luna&uid=123&lang=fr
+ * GET /api/chat?prompt=decris cette photo&image=https://exemple.com/photo.jpg&uid=123   (vision)
  *
  * Route Vercel (serverless) : interroge le modèle demandé via le backend
  * gratuit de aichatting.net et renvoie la réponse en JSON.
  *
  * Paramètres :
- *   - prompt : texte à envoyer au modèle (obligatoire)
+ *   - prompt : texte à envoyer au modèle (obligatoire, sauf si `image` fournie)
  *   - model  : nom du modèle (défaut : gpt-5.6-luna)
+ *   - image  : URL(s) d'image(s) à analyser (vision) — répéter le paramètre
+ *              pour plusieurs images ; accepte aussi un data-URI base64
  *   - uid    : identifiant libre du client (renvoyé tel quel)
  *   - lang   : langue utilisée pour le backend (défaut : fr)
  *
- * Exemple :
+ * Exemples :
  *   GET /api/chat?prompt=Bonjour%20comment%20ca%20va&model=gpt-5.6-luna&uid=123
+ *   GET /api/chat?prompt=Que%20voit-on%20sur%20cette%20photo&image=https://picsum.photos/seed/cat/640/480&uid=42
  */
 
 "use strict";
@@ -36,13 +40,15 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const { prompt, model, uid, lang } = req.query;
+  const { prompt, model, uid, lang, image } = req.query;
+  const images = image ? (Array.isArray(image) ? image : [image]) : [];
 
-  if (!prompt || !String(prompt).trim()) {
+  if ((!prompt || !String(prompt).trim()) && images.length === 0) {
     res.status(400).json({
       success: false,
-      error: "Le paramètre 'prompt' est obligatoire",
+      error: "Le paramètre 'prompt' est obligatoire (ou fournissez 'image')",
       usage: "GET /api/chat?prompt=bonjour&model=gpt-5.6-luna&uid=123",
+      usage_vision: "GET /api/chat?prompt=decris%20cette%20photo&image=https://exemple.com/photo.jpg",
       models_disponibles: require("../lib/aichatting").FREE_MODELS,
     });
     return;
@@ -50,7 +56,8 @@ module.exports = async function handler(req, res) {
 
   try {
     const result = await chat({
-      prompt: String(prompt).slice(0, 4000), // limite de sécurité
+      prompt: prompt ? String(prompt).slice(0, 4000) : "", // limite de sécurité
+      images: images.slice(0, 4).map((i) => String(i).slice(0, 100000)), // max 4 images
       model: model ? String(model) : undefined,
       lang: lang ? String(lang) : "fr",
     });
@@ -62,6 +69,7 @@ module.exports = async function handler(req, res) {
       reply: result.reply,
       model: result.model,
       uid: uid !== undefined ? String(uid) : null,
+      images: images.length ? images : undefined,
       conversationId: result.conversationId,
       source: "https://www.aichatting.net/fr/free-chatgpt/",
       ...(isProOnly

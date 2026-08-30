@@ -16,8 +16,9 @@ GET /api/chat?prompt=bonjour&model=gpt-5.6-luna&uid=123&lang=fr
 
 | Paramètre | Type | Description |
 |---|---|---|
-| `prompt` | string (requis) | Texte à envoyer au modèle |
+| `prompt` | string (requis) | Texte à envoyer au modèle (optionnel si `image` fournie) |
 | `model` | string | Nom du modèle (défaut : `gpt-5.6-luna`) |
+| `image` | string | **Vision** : URL d'une image à analyser (répéter pour plusieurs images, max 4) |
 | `uid` | string | Identifiant libre du client (renvoyé tel quel) |
 | `lang` | string | Langue du backend (défaut : `fr`) |
 
@@ -37,6 +38,30 @@ curl "https://<votre-deploiement>.vercel.app/api/chat?prompt=Bonjour%20comment%2
   "source": "https://www.aichatting.net/fr/free-chatgpt/"
 }
 ```
+
+### 🖼️ Vision (répondre à une image)
+
+Oui, l'API comprend les images — comme le site (qui les envoie en base64) :
+
+```bash
+curl "https://<votre-deploiement>.vercel.app/api/chat?prompt=Decris%20cette%20photo&image=https://picsum.photos/seed/cat/640/480&uid=42"
+```
+
+```json
+{
+  "success": true,
+  "reply": "On voit une table de café en terrasse, entourée de chaises, avec des plantes…",
+  "model": "gpt-5.6-luna",
+  "uid": "42",
+  "images": ["https://picsum.photos/seed/cat/640/480"],
+  "conversationId": 29879210
+}
+```
+
+- **Plusieurs images** : répéter `image=` (max 4), ex. `&image=url1&image=url2`
+- L'API télécharge l'URL, la convertit en **base64 data-URI** et l'envoie au backend — c'est le seul format accepté (les URL brutes sont bloquées par le filtre de modération du backend, découvert en testant).
+- Vous pouvez aussi passer directement un data-URI (`image=data:image/jpeg;base64,...`) mais attention à la limite de taille d'URL (≈8 Ko) : préférez une URL.
+- Limites : image < 5 Mo, formats jpg/png/gif/webp.
 
 ## Modèles testés
 
@@ -90,6 +115,10 @@ clé publique embarquée dans le bundle JS du site (`fingerprintInit` →
 La réponse est un flux SSE (`data: ...`) terminé par `--@DONE@--`, avec des
 tokens de mise en forme : `-=- --` → espace, `-=-n--` → retour à la ligne
 (même logique de décodage que le frontend du site).
+
+**Vision :** le frontend du site compresse l'image (≤ 1024 px, qualité 0.6)
+puis l'envoie en **base64 data-URI** dans un bloc `image_url` — l'API
+reproduit ce comportement (`toDataUri` dans `lib/aichatting.js`).
 
 ## Déploiement Vercel
 

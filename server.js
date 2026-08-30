@@ -33,15 +33,17 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const { prompt, model, uid, lang } = parsed.query;
+  const { prompt, model, uid, lang, image } = parsed.query;
+  const images = image ? (Array.isArray(image) ? image : [image]) : [];
 
-  if (!prompt || !String(prompt).trim()) {
+  if ((!prompt || !String(prompt).trim()) && images.length === 0) {
     res.writeHead(400, { ...cors, "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
         success: false,
-        error: "Le paramètre 'prompt' est obligatoire",
+        error: "Le paramètre 'prompt' est obligatoire (ou fournissez 'image')",
         usage: "GET /api/chat?prompt=bonjour&model=gpt-5.6-luna&uid=123",
+        usage_vision: "GET /api/chat?prompt=decris%20cette%20photo&image=https://exemple.com/photo.jpg",
         models_disponibles: FREE_MODELS,
       })
     );
@@ -50,7 +52,8 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const result = await chat({
-      prompt: String(prompt).slice(0, 4000),
+      prompt: prompt ? String(prompt).slice(0, 4000) : "",
+      images: images.slice(0, 4).map((i) => String(i).slice(0, 100000)),
       model: model ? String(model) : undefined,
       lang: lang ? String(lang) : "fr",
     });
@@ -62,6 +65,7 @@ const server = http.createServer(async (req, res) => {
         reply: result.reply,
         model: result.model,
         uid: uid !== undefined ? String(uid) : null,
+        images: images.length ? images : undefined,
         conversationId: result.conversationId,
         ...(isProOnly
           ? { error: "Ce modèle nécessite un compte PRO (aichatting.net)." }
