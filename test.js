@@ -1,17 +1,43 @@
 /**
  * Test automatisé de tous les modèles.
  *
- *   node test.js            # modèles gratuits (FREE_MODELS)
- *   node test.js --all      # gratuits + modèles PRO
+ *   node test.js                 # modèles gratuits (FREE_MODELS)
+ *   node test.js --all           # gratuits + modèles PRO
+ *   node test.js --vision [url]  # vision : gpt-5.6-luna + claude sonnet 4
  *
  * Chaque modèle est testé avec un visiteur neuf (quota gratuit).
  */
 
 "use strict";
 
-const { chat, FREE_MODELS, PRO_MODELS } = require("./lib/aichatting");
+const { chat, chatReliable, FREE_MODELS, PRO_MODELS } = require("./lib/aichatting");
+
+async function testVision() {
+  const idx = process.argv.indexOf("--vision");
+  const imgUrl =
+    process.argv[idx + 1] && !process.argv[idx + 1].startsWith("--")
+      ? process.argv[idx + 1]
+      : "https://http.cat/200.jpg";
+  const models = ["gpt-5.6-luna", "claude-sonnet-4-20250514"];
+  console.log(`🖼️  Test vision (${imgUrl}) sur ${models.length} modèles...\n`);
+  let ok = 0;
+  for (const model of models) {
+    try {
+      const { reply } = await chatReliable({ prompt: "décris cette image en une phrase", images: [imgUrl], model });
+      const good = reply.length > 0 && !/pro premium member/i.test(reply);
+      if (good) ok++;
+      console.log(`${good ? "✅" : "⚠️"} ${model} => ${JSON.stringify(reply.slice(0, 140))}`);
+    } catch (err) {
+      console.log(`❌ ${model} => ${String(err.message).slice(0, 140)}`);
+    }
+  }
+  console.log(`\nRésumé : ${ok}/${models.length} modèles vision OK.`);
+  process.exit(ok > 0 ? 0 : 1);
+}
 
 async function main() {
+  if (process.argv.includes("--vision")) return testVision();
+
   const includePro = process.argv.includes("--all");
   const models = [...FREE_MODELS, ...(includePro ? PRO_MODELS : [])];
 

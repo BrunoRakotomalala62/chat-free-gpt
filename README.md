@@ -10,15 +10,32 @@ gratuit en ligne, sans inscription). Déployable tel quel sur **Vercel**.
 
 ## Endpoint
 
+### GET (texte, simple)
+
 ```
 GET /api/chat?prompt=bonjour&model=gpt-5.6-luna&uid=123&lang=fr
 ```
 
+### POST (recommandé pour la vision / les images)
+
+```
+POST /api/chat
+Content-Type: application/json
+
+{
+  "prompt": "Que voit-on sur cette photo ?",
+  "model": "gpt-5.6-luna",
+  "uid": "123",
+  "lang": "fr",
+  "images": ["data:image/jpeg;base64,…", "https://exemple.com/photo.jpg"]
+}
+```
+
 | Paramètre | Type | Description |
 |---|---|---|
-| `prompt` | string (requis) | Texte à envoyer au modèle (optionnel si `image` fournie) |
+| `prompt` | string (requis) | Texte à envoyer au modèle (optionnel si une image est fournie) |
 | `model` | string | Nom du modèle (défaut : `gpt-5.6-luna`) |
-| `image` | string | **Vision** : URL d'une image à analyser (répéter pour plusieurs images, max 4) |
+| `image` / `images` | string \| string[] | **Vision** : image(s) à analyser — en GET répéter `image=` ; en POST envoyer le tableau `images`. URL ou data-URI base64, max 4 |
 | `uid` | string | Identifiant libre du client (renvoyé tel quel) |
 | `lang` | string | Langue du backend (défaut : `fr`) |
 
@@ -44,24 +61,31 @@ curl "https://<votre-deploiement>.vercel.app/api/chat?prompt=Bonjour%20comment%2
 Oui, l'API comprend les images — comme le site (qui les envoie en base64) :
 
 ```bash
-curl "https://<votre-deploiement>.vercel.app/api/chat?prompt=Decris%20cette%20photo&image=https://picsum.photos/seed/cat/640/480&uid=42"
+curl -X POST "https://<votre-deploiement>.vercel.app/api/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Décris cette photo","model":"gpt-5.6-luna","images":["https://http.cat/200.jpg"]}'
 ```
 
 ```json
 {
   "success": true,
-  "reply": "On voit une table de café en terrasse, entourée de chaises, avec des plantes…",
+  "reply": "Sur cette image, je vois un chat blanc avec une expression…",
   "model": "gpt-5.6-luna",
-  "uid": "42",
-  "images": ["https://picsum.photos/seed/cat/640/480"],
+  "images": ["https://http.cat/200.jpg"],
   "conversationId": 29879210
 }
 ```
 
-- **Plusieurs images** : répéter `image=` (max 4), ex. `&image=url1&image=url2`
-- L'API télécharge l'URL, la convertit en **base64 data-URI** et l'envoie au backend — c'est le seul format accepté (les URL brutes sont bloquées par le filtre de modération du backend, découvert en testant).
-- Vous pouvez aussi passer directement un data-URI (`image=data:image/jpeg;base64,...`) mais attention à la limite de taille d'URL (≈8 Ko) : préférez une URL.
-- Limites : image < 5 Mo, formats jpg/png/gif/webp.
+- **Plusieurs images** : tableau `images` (ou répéter `image=` en GET), max 4.
+- **POST recommandé** : en GET, Vercel coupe les URL trop longues (HTTP **414** au-delà
+  d'environ 34 Ko de base64). Les images locales (data-URI) doivent passer en POST.
+- L'API télécharge les URL, les convertit en **base64 data-URI** et les envoie au
+  backend — c'est le seul format accepté (les URL brutes sont bloquées par le filtre
+  de modération du backend).
+- Le backend gratuit rejette parfois une image (filtre de modération aléatoire) :
+  l'API **réessaie automatiquement une fois** avec un visiteur neuf
+  (`chatReliable` dans `lib/aichatting.js`).
+- Limites : image < 5 Mo, formats jpg/png/gif/webp, ~2,2 Mo par data-URI envoyé.
 
 ## Modèles testés
 
@@ -149,9 +173,10 @@ node test.js --all    # inclut les modèles PRO (réponse attendue : message PRO
 ## Structure
 
 ```
-api/chat.js        → fonction serverless Vercel (GET /api/chat)
-lib/aichatting.js  → client du backend aichatting (vToken RSA, conversation, SSE)
+api/chat.js        → fonction serverless Vercel (GET + POST /api/chat)
+lib/handler.js     → logique HTTP commune (CORS, GET, POST JSON, erreurs)
+lib/aichatting.js  → client du backend aichatting (vToken RSA, conversation, SSE, vision, chatReliable)
 server.js          → serveur local de test (zéro dépendance)
-test.js            → test automatisé de tous les modèles
+test.js            → test automatisé des modèles + vision (node test.js --vision)
 vercel.json        → configuration Vercel (route + maxDuration)
 ```
