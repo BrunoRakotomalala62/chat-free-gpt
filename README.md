@@ -2,7 +2,10 @@
 
 API REST gratuite qui expose un endpoint `GET /api/chat` en s'appuyant sur le
 backend du site **https://www.aichatting.net/fr/free-chatgpt/** (ChatGPT
-gratuit en ligne, sans inscription). Déployable tel quel sur **Vercel**.
+gratuit en ligne, sans inscription), plus une route **`/api/plot`** qui
+construit des **figures en SVG** : courbes mathématiques (`expression=`) **ou
+n'importe quelle figure par IA** (`subject=` — physique, chimie, circuits
+électriques…). Déployable tel quel sur **Vercel**.
 
 > ⚠️ Projet à but éducatif. Non affilié à aichatting.net. Le backend gratuit
 > octroie ~2 messages par visiteur : l'API génère un nouveau visiteur à
@@ -87,6 +90,120 @@ curl -X POST "https://<votre-deploiement>.vercel.app/api/chat" \
   (`chatReliable` dans `lib/aichatting.js`).
 - Limites : image < 5 Mo, formats jpg/png/gif/webp, ~2,2 Mo par data-URI envoyé.
 
+---
+
+## 📈 Endpoint figures : `/api/plot` (alias `/api/figure`)
+
+Deux modes complémentaires, réponse en JSON avec la figure en **SVG** (ou SVG
+brut / points) :
+
+1. **Courbes mathématiques** — `expression=` (déterministe, instantané, hors-ligne)
+2. **Figures dynamiques par IA** — `subject=` : **n'importe quelle figure** en
+   langage naturel (physique, chimie, circuits électriques, effets, montages…)
+
+```
+GET /api/plot?expression=x-2ln(x)
+GET /api/plot?subject=mise+en+%C3%A9vidence+de+l%27effet+photo%C3%A9lectrique
+GET /api/plot?subject=circuit+%C3%A9lectrique+avec+lampe+et+interrupteur&format=svg
+GET /api/plot?expression=sin(x)&xmin=-10&xmax=10&width=800&height=600&color=%23ff0000
+GET /api/plot?expression=1/(x^2+1)&format=svg          → figure brute (image/svg+xml)
+GET /api/plot?expression=tan(x)&format=points         → juste les points [[x,y],…]
+POST /api/plot                                        → même chose, en JSON
+{ "expression": "x - 2*ln(x)", "xmin": 0.1, "xmax": 10 }
+{ "subject": "appareil de distillation simple en chimie", "model": "gpt-5" }
+```
+
+### 🎨 Mode dynamique par IA : n'importe quelle figure
+
+Le sujet libre est envoyé à un modèle de langage (repli automatique entre
+`gpt-5.6-luna`, `gpt-5`, `deepseek-chat`, `gemini-2.0-flash`) avec une consigne
+de dessinateur : l'API extrait, **assainit** (anti-XSS) et **valide** le SVG
+(balances XML) avant de le renvoyer. Exemples testés :
+
+- « mise en évidence de l'effet photoélectrique » → tube sous vide, cathode,
+  anode, faisceau lumineux, ampèremètre μA, générateur
+- « circuit électrique avec pile, ampoule et interrupteur » → schéma normalisé
+- « appareil de distillation simple en chimie » → ballon, réfrigérant à eau, thermomètre
+- « schéma d'une lentille convergente », « aimant et lignes de champ magnétique »…
+
+```bash
+curl "https://chat-free-gpt.vercel.app/api/plot?subject=mise%20en%20%C3%A9vidence%20de%20l%27effet%20photo%C3%A9lectrique"
+```
+
+```json
+{
+  "success": true,
+  "subject": "mise en évidence de l'effet photoélectrique",
+  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" …>…</svg>",
+  "model": "gpt-5.6-luna",
+  "attempts": 1,
+  "generated": "ai"
+}
+```
+
+- La figure est volontairement **compacte** (le backend gratuit tronque les
+  réponses au-delà d'environ 2600 caractères) : schéma simplifié à l'essentiel.
+- Si un modèle échoue (timeout, 504, SVG invalide), l'API **réessaie avec les
+  modèles suivants** ; en cas d'échec total → HTTP 502 avec un message clair.
+- `format=svg` renvoie la figure brute ; `format=points` n'existe que pour les courbes.
+
+### Exemple — la courbe de `f(x) = x − 2·ln(x)`
+
+```bash
+curl "https://<votre-deploiement>.vercel.app/api/plot?expression=x-2ln(x)"
+```
+
+```json
+{
+  "success": true,
+  "expression": "x-2ln(x)",
+  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"800\" height=\"600\" …>…</svg>",
+  "points": [[0.005, 10.596], [0.0175, 8.45], …],
+  "domain": { "xmin": 0.005, "xmax": 10 },
+  "range": { "ymin": 0.275, "ymax": 5.422 },
+  "size": { "width": 800, "height": 600 },
+  "samples": 800
+}
+```
+
+- **`svg`** : la figure (grille, axes gradués, courbe, titre) — à injecter dans
+  le DOM (`element.innerHTML = svg`), à sauvegarder en `.svg`, ou à convertir
+  en PNG (ex. `sharp` côté Node, ou `<img>` + canvas côté navigateur).
+- **`points`** : les points échantillonnés `[x, y]` (pratique pour tracer
+  soi-même, ou pour éviter de re-parser le SVG).
+
+| Paramètre | Type | Description |
+|---|---|---|
+| `expression` (alias `expr`, `f`) | string | Fonction à tracer (mode courbe). Préfixe accepté : `f(x)=x-2lnx` |
+| `subject` (alias `figure`, `description`, `topic`) | string | Sujet libre de la figure (mode IA) — ex. « effet photoélectrique » |
+| `model` | string | Modèle IA pour `subject=` (défaut `gpt-5.6-luna`, repli auto sur gpt-5, deepseek-chat, gemini-2.0-flash) |
+| `xmin`, `xmax` | number | Domaine — par défaut **détection automatique** (ex. `ln(x)` → x>0) |
+| `ymin`, `ymax` | number | Échelle verticale — par défaut auto (percentiles, ignore les pics) |
+| `width`, `height` | number | Taille de la figure en px (défaut `800×600`, max 2400×1600) |
+| `samples` | number | Nombre de points (défaut `800`, max `4000`) — mode courbe |
+| `color` | string | Hex `#rrggbb` : couleur de la courbe (mode courbe) ou teinte principale (mode IA) |
+| `title` | string | Titre de la figure (mode courbe) |
+| `format` | string | `json` (défaut) \| `svg` (image brute) \| `points` (courbes uniquement) |
+
+### Syntaxe des expressions
+
+Conventions mathématiques usuelles, **sans `eval`** (parser sûr) :
+
+- Opérateurs : `+ - * / ^` (et `**`), parenthèses, **multiplication implicite**
+  (`2x`, `2ln(x)`, `(x+1)(x-1)`, `sin(x)cos(x)`).
+- Fonctions : `ln` (népérien), `log`/`log10` (décimal), `log2`, `exp`, `sqrt`,
+  `cbrt`, `abs`, `sign`, `floor`, `ceil`, `round`, `sin`, `cos`, `tan`, `asin`,
+  `acos`, `atan`, `atan2(y,x)`, `sinh`, `cosh`, `tanh`, `min(...)`, `max(...)`.
+- Appels sans parenthèses acceptés : `ln x`, `sin 2x`, `ln x^2` → `ln(x)`, `sin(2x)`, `ln(x²)`.
+- Constantes : `pi`, `e`. Variable : `x`. Notation scientifique : `1e-3`.
+- Le domaine de définition est respecté : `ln(x)` (x>0), `sqrt(x)`, asymptotes
+  verticales coupées (`tan(x)`, `1/x`), etc.
+
+> 🎓 Astuce : combinez avec `/api/chat` — demandez au modèle de « construire la
+> courbe représentative de f(x)=x-2ln(x) » ou « fais la figure de l'effet
+> photoélectrique », puis appelez `/api/plot` avec l'`expression` ou le `subject`
+> pour obtenir la figure.
+
 ## Modèles testés
 
 Le site n'expose officiellement que deux modèles (`gpt-5.6-luna` gratuit et
@@ -153,30 +270,38 @@ reproduit ce comportement (`toDataUri` dans `lib/aichatting.js`).
 npx vercel --prod
 ```
 
-`vercel.json` configure la route `/api/chat` vers `api/chat.js` avec un
-`maxDuration` de 60 s (les réponses courtes arrivent en quelques secondes).
+`vercel.json` configure les routes `/api/chat` (vers `api/chat.js`, `maxDuration` 60 s)
+et `/api/plot` + `/api/figure` (vers `api/plot.js`, `maxDuration` 10 s).
 
 ## Test en local
 
 ```bash
 npm start
 curl "http://localhost:3000/api/chat?prompt=bonjour&model=gpt-5.6-luna&uid=123"
+curl "http://localhost:3000/api/plot?expression=x-2ln(x)"
+curl "http://localhost:3000/api/plot?expression=sin(x)&format=svg"
 ```
 
-## Test automatisé de tous les modèles
+## Tests automatisés
 
 ```bash
 node test.js          # teste la liste FREE_MODELS (gratuits)
 node test.js --all    # inclut les modèles PRO (réponse attendue : message PRO)
+node test-plot.js     # teste le moteur de figures (parser, domaine auto, SVG)
 ```
 
 ## Structure
 
 ```
 api/chat.js        → fonction serverless Vercel (GET + POST /api/chat)
-lib/handler.js     → logique HTTP commune (CORS, GET, POST JSON, erreurs)
+api/plot.js        → fonction serverless Vercel (GET + POST /api/plot, alias /api/figure)
+lib/handler.js     → logique HTTP commune de /api/chat (CORS, GET, POST JSON, erreurs)
+lib/plot.js        → moteur de courbes : parser d'expressions, échantillonnage, SVG (zéro dépendance)
+lib/figures-ai.js  → génération de figures par IA : prompt, extraction/assainissement/validation SVG, repli multi-modèles
+lib/plot-handler.js→ logique HTTP commune de /api/plot (CORS, GET, POST, modes expression/subject, formats)
 lib/aichatting.js  → client du backend aichatting (vToken RSA, conversation, SSE, vision, chatReliable)
-server.js          → serveur local de test (zéro dépendance)
+server.js          → serveur local de test (zéro dépendance) — routes chat + plot
 test.js            → test automatisé des modèles + vision (node test.js --vision)
-vercel.json        → configuration Vercel (route + maxDuration)
+test-plot.js       → test automatisé du moteur de courbes (node test-plot.js)
+vercel.json        → configuration Vercel (routes + maxDuration)
 ```

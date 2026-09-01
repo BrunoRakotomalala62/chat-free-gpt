@@ -3,12 +3,19 @@
   "functions": {
     "api/chat.js": {
       "maxDuration": 60
+    },
+    "api/plot.js": {
+      "maxDuration": 60
     }
   },
   "routes": [
     {
       "src": "/api/chat",
       "dest": "/api/chat.js"
+    },
+    {
+      "src": "/api/(plot|figure)",
+      "dest": "/api/plot.js"
     }
   ]
 }
