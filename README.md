@@ -162,15 +162,49 @@ curl "https://<votre-deploiement>.vercel.app/api/plot?expression=x-2ln(x)"
   "domain": { "xmin": 0.005, "xmax": 10 },
   "range": { "ymin": 0.275, "ymax": 5.422 },
   "size": { "width": 800, "height": 600 },
-  "samples": 800
+  "samples": 800,
+  "asymptotes": { "verticales": [{ "x": 0 }], "horizontales": [], "obliques": [] },
+  "branches": [{ "side": "+∞", "type": "parabolique", "direction": "direction y = x" }],
+  "tangente": null
 }
 ```
 
-- **`svg`** : la figure (grille, axes gradués, courbe, titre) — à injecter dans
-  le DOM (`element.innerHTML = svg`), à sauvegarder en `.svg`, ou à convertir
+- **`svg`** : la figure (grille, axes gradués, courbe, titre, **légende**) — à injecter
+  dans le DOM (`element.innerHTML = svg`), à sauvegarder en `.svg`, ou à convertir
   en PNG (ex. `sharp` côté Node, ou `<img>` + canvas côté navigateur).
 - **`points`** : les points échantillonnés `[x, y]` (pratique pour tracer
   soi-même, ou pour éviter de re-parser le SVG).
+
+### 🧭 Branches infinies, asymptotes et tangente (mode courbe)
+
+Le moteur **détecte automatiquement** les branches infinies de la fonction et les
+**trace en pointillés** dans la figure, avec une petite légende :
+
+| Élément | Détection | Exemple |
+|---|---|---|
+| **Asymptote verticale** (`x = x₀`) | pôles intérieurs (sauts de \|f\|) + frontières du domaine (`ln(x)` → x = 0) | `1/x`, `tan(x)`, `x-2ln(x)` |
+| **Asymptote horizontale** (`y = L`) | limite finie en ±∞ | `1/x` → y = 0, `x/(x-1)` → y = 1 |
+| **Asymptote oblique** (`y = ax+b`) | limite de f/x (extrapolation) + convergence de f−ax | `(2x²+1)/(x-1)` → y = 2x+2 |
+| **Branche parabolique** | f/x → ∞ (direction Oy), f/x → 0 (direction Ox), ou direction y=ax | `x²`, `sqrt(x)`, `x-2ln(x)` |
+| **Tangente** | **uniquement si `tangent=` est fourni** (point donné par le sujet/l'utilisateur) | `tangent=2` |
+
+```bash
+# 1/x : asymptotes verticale x=0 et horizontale y=0 (dessinées + légende)
+curl "https://chat-free-gpt.vercel.app/api/plot?expression=1/x"
+
+# (2x²+1)/(x-1) : asymptote verticale x=1 + asymptote oblique y=2x+2
+curl "https://chat-free-gpt.vercel.app/api/plot?expression=(2x^2+1)/(x-1)"
+
+# x²-2x+1 : pas d'asymptote (branches paraboliques) + tangente au point d'abscisse 2
+curl "https://chat-free-gpt.vercel.app/api/plot?expression=x^2-2x+1&tangent=2"
+```
+
+La tangente n'est tracée **que** si un point de tangence est donné (`tangent=2`,
+abscisse x₀ ; la dérivée est calculée numériquement). Sans `tangent`, aucune
+tangente n'est dessinée — conformément à la consigne « si le sujet ne donne pas
+de point, on ne trace pas de tangente ». Si le point est hors domaine ou la
+fonction non dérivable en ce point : `tangente: { x0, impossible: "…" }` et la
+légende l'indique.
 
 | Paramètre | Type | Description |
 |---|---|---|
@@ -183,6 +217,7 @@ curl "https://<votre-deploiement>.vercel.app/api/plot?expression=x-2ln(x)"
 | `samples` | number | Nombre de points (défaut `800`, max `4000`) — mode courbe |
 | `color` | string | Hex `#rrggbb` : couleur de la courbe (mode courbe) ou teinte principale (mode IA) |
 | `title` | string | Titre de la figure (mode courbe) |
+| `tangent` | number | Abscisse x₀ du point de tangence (mode courbe, **optionnel**) — trace la tangente en ce point, avec son équation dans la légende |
 | `format` | string | `json` (défaut) \| `svg` (image brute) \| `points` (courbes uniquement) |
 
 ### Syntaxe des expressions
@@ -202,7 +237,8 @@ Conventions mathématiques usuelles, **sans `eval`** (parser sûr) :
 > 🎓 Astuce : combinez avec `/api/chat` — demandez au modèle de « construire la
 > courbe représentative de f(x)=x-2ln(x) » ou « fais la figure de l'effet
 > photoélectrique », puis appelez `/api/plot` avec l'`expression` ou le `subject`
-> pour obtenir la figure.
+> pour obtenir la figure. Pour la tangente : « trace la courbe de f(x)=x²-2x+1
+> et la tangente au point d'abscisse 2 » → `/api/plot?expression=x^2-2x+1&tangent=2`.
 
 ## Modèles testés
 

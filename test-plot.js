@@ -170,5 +170,137 @@ check("taille personnalisée + couleur", () => {
   if (!fig.svg.includes('stroke="#ff0000"')) throw new Error("couleur");
 });
 
+// ---- branches infinies / asymptotes ----
+check("1/x : asymptote verticale x=0 + horizontale y=0", () => {
+  const fig = buildFigure({ expression: "1/x" });
+  const v = fig.asymptotes.verticales;
+  if (!v.length || Math.abs(v[0].x) > 0.01) throw new Error(`verticales=${JSON.stringify(v)}`);
+  const h = fig.asymptotes.horizontales;
+  if (h.length !== 2 || !h.every((e) => Math.abs(e.y) < 0.01)) {
+    throw new Error(`horizontales=${JSON.stringify(h)}`);
+  }
+  if (!fig.svg.includes('stroke-dasharray="7 5"')) throw new Error("pas de pointillés");
+  if (!fig.svg.includes("Asymptote verticale")) throw new Error("légende manquante");
+});
+
+check("x/(x-1) : verticale x=1 + horizontale y=1", () => {
+  const fig = buildFigure({ expression: "x/(x-1)" });
+  const v = fig.asymptotes.verticales;
+  if (!v.length || Math.abs(v[0].x - 1) > 0.01) throw new Error(`verticales=${JSON.stringify(v)}`);
+  const h = fig.asymptotes.horizontales;
+  if (!h.some((e) => Math.abs(e.y - 1) < 0.01)) throw new Error(`horizontales=${JSON.stringify(h)}`);
+});
+
+check("(2x^2+1)/(x-1) : verticale x=1 + oblique y=2x+2", () => {
+  const fig = buildFigure({ expression: "(2x^2+1)/(x-1)" });
+  const v = fig.asymptotes.verticales;
+  if (!v.length || Math.abs(v[0].x - 1) > 0.01) throw new Error(`verticales=${JSON.stringify(v)}`);
+  const o = fig.asymptotes.obliques;
+  if (!o.length || !o.some((e) => Math.abs(e.a - 2) < 0.01 && Math.abs(e.b - 2) < 0.1)) {
+    throw new Error(`obliques=${JSON.stringify(o)}`);
+  }
+  if (!fig.svg.includes("Asymptote oblique : y = 2x + 2")) {
+    throw new Error("légende oblique incorrecte");
+  }
+});
+
+check("x + 1/x : oblique y = x + verticale x=0", () => {
+  const fig = buildFigure({ expression: "x+1/x" });
+  const o = fig.asymptotes.obliques;
+  if (!o.some((e) => Math.abs(e.a - 1) < 0.01 && Math.abs(e.b) < 0.1)) {
+    throw new Error(`obliques=${JSON.stringify(o)}`);
+  }
+});
+
+check("x-2ln(x) : verticale x≈0 (frontière) + branche parabolique direction y=x, pas d'oblique", () => {
+  const fig = buildFigure({ expression: "x-2ln(x)" });
+  const v = fig.asymptotes.verticales;
+  if (!v.some((e) => Math.abs(e.x) < 0.05)) throw new Error(`verticales=${JSON.stringify(v)}`);
+  if (fig.asymptotes.obliques.length) throw new Error(`obliques=${JSON.stringify(fig.asymptotes.obliques)}`);
+  const b = fig.branches;
+  if (!b.some((e) => e.type === "parabolique" && /y = x/.test(e.direction || ""))) {
+    throw new Error(`branches=${JSON.stringify(b)}`);
+  }
+  if (!fig.svg.includes("Branche parabolique")) throw new Error("légende branche manquante");
+});
+
+check("x^2-2x+1 : aucune asymptote, branches paraboliques (Oy)", () => {
+  const fig = buildFigure({ expression: "x^2-2x+1" });
+  if (fig.asymptotes.verticales.length || fig.asymptotes.horizontales.length || fig.asymptotes.obliques.length) {
+    throw new Error(`asymptotes=${JSON.stringify(fig.asymptotes)}`);
+  }
+  if (!fig.branches.length || !fig.branches.every((e) => e.type === "parabolique")) {
+    throw new Error(`branches=${JSON.stringify(fig.branches)}`);
+  }
+  if (fig.svg.includes('stroke-dasharray="7 5"')) throw new Error("pointillés inattendus");
+});
+
+check("sin(x) : aucune asymptote ni branche infinie", () => {
+  const fig = buildFigure({ expression: "sin(x)" });
+  if (fig.asymptotes.verticales.length || fig.asymptotes.horizontales.length || fig.asymptotes.obliques.length) {
+    throw new Error(`asymptotes=${JSON.stringify(fig.asymptotes)}`);
+  }
+  if (fig.branches.length) throw new Error(`branches=${JSON.stringify(fig.branches)}`);
+});
+
+check("tan(x) : ≥ 3 asymptotes verticales (π/2, 3π/2…)", () => {
+  const fig = buildFigure({ expression: "tan(x)" });
+  const v = fig.asymptotes.verticales;
+  if (v.length < 3 || !v.some((e) => Math.abs(Math.abs(e.x) - Math.PI / 2) < 0.02)) {
+    throw new Error(`verticales=${JSON.stringify(v)}`);
+  }
+});
+
+check("sqrt(x) : pas d'asymptote verticale en 0, branche parabolique (Ox)", () => {
+  const fig = buildFigure({ expression: "sqrt(x)" });
+  if (fig.asymptotes.verticales.length) throw new Error(`verticales=${JSON.stringify(fig.asymptotes.verticales)}`);
+  const b = fig.branches;
+  if (!b.some((e) => e.type === "parabolique" && e.direction === "direction (Ox)")) {
+    throw new Error(`branches=${JSON.stringify(b)}`);
+  }
+});
+
+check("e^(-x) : asymptote horizontale y≈0 en +∞", () => {
+  const fig = buildFigure({ expression: "e^(-x)" });
+  const h = fig.asymptotes.horizontales;
+  if (!h.some((e) => Math.abs(e.y) < 0.01 && e.side === "+∞")) {
+    throw new Error(`horizontales=${JSON.stringify(h)}`);
+  }
+});
+
+// ---- tangente ----
+check("tangente de x^2-2x+1 en x=2 → y = 2x - 3 (tracée en pointillés rouges)", () => {
+  const fig = buildFigure({ expression: "x^2-2x+1", tangent: 2 });
+  if (!fig.tangente || Math.abs(fig.tangente.m - 2) > 1e-3 || Math.abs(fig.tangente.b + 3) > 1e-3) {
+    throw new Error(`tangente=${JSON.stringify(fig.tangente)}`);
+  }
+  if (!fig.svg.includes('stroke-dasharray="6 4"')) throw new Error("tangente non tracée");
+  if (!fig.svg.includes("<circle")) throw new Error("point de contact manquant");
+  if (!fig.svg.includes("Tangente en x = 2 : y = 2x - 3")) throw new Error("légende tangente");
+});
+
+check("tangente de 1/x en x=2 → m=-0.25, b=1", () => {
+  const fig = buildFigure({ expression: "1/x", tangent: 2 });
+  if (!fig.tangente || Math.abs(fig.tangente.m + 0.25) > 1e-3 || Math.abs(fig.tangente.b - 1) > 1e-3) {
+    throw new Error(`tangente=${JSON.stringify(fig.tangente)}`);
+  }
+});
+
+check("pas de tangente sans paramètre", () => {
+  const fig = buildFigure({ expression: "x^2-2x+1" });
+  if (fig.tangente !== null) throw new Error(`tangente=${JSON.stringify(fig.tangente)}`);
+});
+
+check("tangente hors domaine affiché → impossible", () => {
+  const fig = buildFigure({ expression: "x^2-2x+1", tangent: 50 });
+  if (!fig.tangente || !fig.tangente.impossible) throw new Error(`tangente=${JSON.stringify(fig.tangente)}`);
+  if (!fig.svg.includes("Tangente en x = 50 : impossible")) throw new Error("légende");
+});
+
+check("tangente hors domaine de définition → impossible (sqrt en x=-2)", () => {
+  const fig = buildFigure({ expression: "sqrt(x)", tangent: -2 });
+  if (!fig.tangente || !fig.tangente.impossible) throw new Error(`tangente=${JSON.stringify(fig.tangente)}`);
+});
+
 console.log(`\n${pass} test(s) OK, ${fail} échec(s)`);
 process.exit(fail ? 1 : 0);
