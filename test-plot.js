@@ -379,5 +379,12 @@ check("tangente sur exp, sin, cos, ln (formule f'(x0)(x-x0)+f(x0))", () => {
   }
 });
 
+check("tangente de sin(x) en π/2 → y = 1 (pente nulle propre)", () => {
+  const fig = buildFigure({ expression: "sin(x)", tangent: Math.PI / 2 });
+  if (!fig.tangente || fig.tangente.equation !== "y = 1") {
+    throw new Error(`equation=${fig.tangente && fig.tangente.equation}`);
+  }
+});
+
 console.log(`\n${pass} test(s) OK, ${fail} échec(s)`);
 process.exit(fail ? 1 : 0);
