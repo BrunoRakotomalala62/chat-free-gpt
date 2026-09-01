@@ -215,6 +215,14 @@ t("hauteurs concourantes en H", (f25.steps || []).some((s) => /H =/.test(s.label
 const f26 = geo("Tracer le triangle ABC. Tracer la droite des milieux du triangle ABC.");
 t("droite des milieux tracée", (f26.steps || []).some((s) => s.kind === "droite des milieux"), lbls(f26));
 
+console.log("--- connecteurs « puis » / « ensuite » ---");
+const f28 = geo("Tracer le triangle ABC, puis la hauteur issue de A.");
+t("puis sépare les étapes", f28.steps.length === 2, lbls(f28));
+t("  hauteur issue de A construite", (f28.steps || []).some((s) => s.kind === "hauteur"), lbls(f28));
+const f29 = geo("Placer P sur (AB), ensuite tracer la perpendiculaire en P");
+t("ensuite sépare les étapes", f29.steps.length === 2, lbls(f29));
+t("  perpendiculaire en P", (f29.steps || []).some((s) => s.kind === "perpendiculaire"), lbls(f29));
+
 console.log("--- polygones étendus ---");
 const f27 = geo("Tracer le trapèze GHIJ. Tracer le pentagone KLMNO. Tracer l'hexagone PQRSTU.");
 t("trapèze + pentagone + hexagone", !f27.error && f27.steps.length === 3, f27.error || lbls(f27));
