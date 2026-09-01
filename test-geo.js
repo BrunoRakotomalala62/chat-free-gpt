@@ -103,6 +103,12 @@ const f10 = geo("Tracer (AB).", { width: 600, height: 450 });
 t("taille personnalisée", !f10.error && f10.svg.includes('width="600"'));
 t("points auto sans 'soit'", pts(f10) === "AB", pts(f10));
 
+console.log("--- formulations du bot (repli dernière droite) ---");
+const fb = geo("Soit A et B deux points. Tracer (AB). Placer un point P sur (AB). Tracer la perpendiculaire en P.");
+t("« perpendiculaire en P » sans référence → dernière droite (AB)", (fb.steps || []).some((s) => s.kind === "perpendiculaire" && /\(AB\)/.test(s.label)), lbls(fb));
+const fb2 = geo("Tracer la droite (AB). Placer un point P sur (AB). Tracer la parallèle passant par P.");
+t("« parallèle passant par P » sans référence", (fb2.steps || []).some((s) => s.kind === "parallèle"), lbls(fb2));
+
 console.log("--- questions numérotées dans un énoncé ---");
 const f11 = geo("Exercice 1 : Soient A et B deux points. a) Tracer (AB). b) Placer un point P sur (AB). c) Tracer la droite passant par P perpendiculaire à (AB).");
 t("success", !f11.error, f11.error);
