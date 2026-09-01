@@ -197,14 +197,31 @@ curl "https://chat-free-gpt.vercel.app/api/plot?expression=(2x^2+1)/(x-1)"
 
 # x²-2x+1 : pas d'asymptote (branches paraboliques) + tangente au point d'abscisse 2
 curl "https://chat-free-gpt.vercel.app/api/plot?expression=x^2-2x+1&tangent=2"
+
+# x²-2x+1 avec la droite d'équation y = 2x - 3 donnée directement (tracée en vert)
+curl "https://chat-free-gpt.vercel.app/api/plot?expression=x^2-2x+1&line=2x-3"
+
+# droite seule (sans fonction) : titre « Droite (d) : y = 2x - 3 »
+curl "https://chat-free-gpt.vercel.app/api/plot?line=2x-3"
 ```
 
 La tangente n'est tracée **que** si un point de tangence est donné (`tangent=2`,
-abscisse x₀ ; la dérivée est calculée numériquement). Sans `tangent`, aucune
-tangente n'est dessinée — conformément à la consigne « si le sujet ne donne pas
-de point, on ne trace pas de tangente ». Si le point est hors domaine ou la
-fonction non dérivable en ce point : `tangente: { x0, impossible: "…" }` et la
-légende l'indique.
+abscisse x₀ ; la dérivée est calculée numériquement et l'équation affichée
+provient de la formule **`(T) : y = f'(x₀)(x − x₀) + f(x₀)`**, développée en
+`y = mx + b`). Sans `tangent`, aucune tangente n'est dessinée — conformément à
+la consigne « si le sujet ne donne pas de point, on ne trace pas de tangente ».
+Si le point est hors domaine ou la fonction non dérivable en ce point :
+`tangente: { x0, impossible: "…" }` et la légende l'indique.
+
+**Droite donnée directement** : si l'exercice donne « la droite d'équation
+`y = ax+b` », passez `line=` (alias `droite=`) — la droite est **tracée en
+vert** (solide) avec sa légende « Droite : y = ax + b », en plus de la courbe
+ou seule (sans `expression=`). Seules les expressions **affines** sont
+acceptées (`2x-3`, `y=-x+1`, `0.5x`, `x+2`) ; `x²`, `sin(x)`, produits → 400.
+
+**Toutes les fonctions usuelles** sont tracées dynamiquement : `exp`/`e^x`,
+`ln`, `log`, `sqrt`, `sin`, `cos`, `tan`, `sinh`, `cosh`, … avec asymptotes,
+branches et tangentes comme pour les fonctions rationnelles.
 
 | Paramètre | Type | Description |
 |---|---|---|
@@ -218,6 +235,7 @@ légende l'indique.
 | `color` | string | Hex `#rrggbb` : couleur de la courbe (mode courbe) ou teinte principale (mode IA) |
 | `title` | string | Titre de la figure (mode courbe) |
 | `tangent` | number | Abscisse x₀ du point de tangence (mode courbe, **optionnel**) — trace la tangente en ce point, avec son équation dans la légende |
+| `line` (alias `droite`) | string | Droite donnée directement par l'exercice (mode courbe, **optionnel**) — ex. `2x-3`, `y=-x+1` ; tracée en vert, avec la courbe ou seule |
 | `format` | string | `json` (défaut) \| `svg` (image brute) \| `points` (courbes uniquement) |
 
 ### Syntaxe des expressions

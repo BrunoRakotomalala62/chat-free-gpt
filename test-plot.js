@@ -302,5 +302,82 @@ check("tangente hors domaine de définition → impossible (sqrt en x=-2)", () =
   if (!fig.tangente || !fig.tangente.impossible) throw new Error(`tangente=${JSON.stringify(fig.tangente)}`);
 });
 
+// ---- droite y = ax+b donnée directement (line=) ----
+check("courbe + droite : line=2x-3 tracée en vert avec légende", () => {
+  const fig = buildFigure({ expression: "x^2-2x+1", line: "2x-3" });
+  if (!fig.droite || Math.abs(fig.droite.a - 2) > 1e-9 || Math.abs(fig.droite.b + 3) > 1e-9) {
+    throw new Error(`droite=${JSON.stringify(fig.droite)}`);
+  }
+  if (!fig.svg.includes('stroke="#16a34a"')) throw new Error("droite non tracée en vert");
+  if (!fig.svg.includes("Droite : y = 2x - 3")) throw new Error("légende droite manquante");
+  if (!fig.svg.includes('stroke="#2563eb"')) throw new Error("courbe absente");
+});
+
+check("droite seule : line=2x-3 (sans expression) → titre 'Droite (d)…'", () => {
+  const fig = buildFigure({ line: "2x-3" });
+  if (!fig.svg.includes("Droite (d) : y = 2x - 3")) throw new Error("titre");
+  if (!fig.droite || Math.abs(fig.droite.a - 2) > 1e-9) throw new Error(`droite=${JSON.stringify(fig.droite)}`);
+  if (fig.asymptotes.obliques.length) throw new Error("fausse asymptote oblique");
+  if (fig.svg.includes('stroke="#2563eb"')) throw new Error("courbe bleue inattendue");
+});
+
+check("line avec préfixe y= (line=y=-x+1) → a=-1, b=1", () => {
+  const fig = buildFigure({ line: "y=-x+1" });
+  if (!fig.droite || Math.abs(fig.droite.a + 1) > 1e-9 || Math.abs(fig.droite.b - 1) > 1e-9) {
+    throw new Error(`droite=${JSON.stringify(fig.droite)}`);
+  }
+});
+
+check("expressions non affines rejetées pour line=", () => {
+  for (const bad of ["x^2", "sin(x)", "x*x", "2^x"]) {
+    let threw = false;
+    try {
+      buildFigure({ line: bad });
+    } catch (e) {
+      threw = true;
+    }
+    if (!threw) throw new Error(`accepté à tort : "${bad}"`);
+  }
+});
+
+check("courbe + droite + tangente ensemble", () => {
+  const fig = buildFigure({ expression: "x^2-2x+1", line: "2x-3", tangent: 2 });
+  if (!fig.droite || !fig.tangente || fig.tangente.impossible) {
+    throw new Error(JSON.stringify({ d: fig.droite, t: fig.tangente }));
+  }
+  if (!fig.svg.includes("Tangente en x = 2 : y = 2x - 3")) throw new Error("légende tangente");
+});
+
+// ---- fonctions usuelles : exp, ln, sin, cos, tan (dynamiques) ----
+check("fonctions usuelles tracées dynamiquement (exp, ln, sin, cos, tan…)", () => {
+  for (const expr of ["e^(-x)", "exp(x)", "ln(x)", "sin(x)", "cos(x)", "tan(x)", "2sin(x)cos(x)", "e^(-x^2)", "1/(1+e^(-x))"]) {
+    const fig = buildFigure({ expression: expr });
+    if (fig.error || !fig.svg.includes("<path") || !fig.points.length) {
+      throw new Error(`${expr} : ${fig.error || "pas de courbe"}`);
+    }
+  }
+});
+
+check("tangente sur exp, sin, cos, ln (formule f'(x0)(x-x0)+f(x0))", () => {
+  const cases = [
+    ["e^(-x)", 1, -Math.exp(-1)],          // f'(1) = -e^{-1}
+    ["sin(x)", Math.PI / 2, 0],            // f'(π/2) = cos(π/2) = 0
+    ["cos(2x)", 1, -2 * Math.sin(2)],      // f'(x) = -2sin(2x)
+    ["ln(x)", 2, 0.5],                     // f'(2) = 1/2
+  ];
+  for (const [expr, x0, expectedM] of cases) {
+    const fig = buildFigure({ expression: expr, tangent: x0 });
+    if (!fig.tangente || fig.tangente.impossible) throw new Error(`${expr} : ${JSON.stringify(fig.tangente)}`);
+    if (Math.abs(fig.tangente.m - expectedM) > 1e-3) {
+      throw new Error(`${expr} en x=${x0} : m=${fig.tangente.m} attendu ${expectedM}`);
+    }
+    // vérifie y = f'(x0)(x-x0)+f(x0) : b = f(x0) - m·x0
+    const f = { "e^(-x)": Math.exp(-1), "sin(x)": 1, "cos(2x)": Math.cos(2), "ln(x)": Math.log(2) }[expr];
+    if (Math.abs(fig.tangente.b - (f - fig.tangente.m * x0)) > 1e-6) {
+      throw new Error(`${expr} : b=${fig.tangente.b} ≠ f(x0)-m·x0=${f - fig.tangente.m * x0}`);
+    }
+  }
+});
+
 console.log(`\n${pass} test(s) OK, ${fail} échec(s)`);
 process.exit(fail ? 1 : 0);
