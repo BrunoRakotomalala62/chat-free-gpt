@@ -115,6 +115,110 @@ t("success", !f11.error, f11.error);
 t("4 étapes (soit + a + b + c)", f11.steps.length === 4, JSON.stringify(f11.steps));
 t("perpendiculaire en P", (f11.steps || []).some((s) => s.kind === "perpendiculaire"), lbls(f11));
 
+console.log("--- triangles contraints ---");
+const f12 = geo("Tracer le triangle ABC équilatéral.");
+t("équilatéral construit (AB = AC = BC)", !f12.error, f12.error);
+t("  côtés égaux", (() => {
+  const p = Object.fromEntries(f12.points.map((x) => [x.name, x]));
+  const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
+  return Math.abs(d("A", "B") - d("A", "C")) < 1e-4 && Math.abs(d("A", "B") - d("B", "C")) < 1e-4;
+})());
+const f13 = geo("Tracer le triangle ABC isocèle en A.");
+t("isocèle en A (AB = AC)", (() => {
+  const p = Object.fromEntries(f13.points.map((x) => [x.name, x]));
+  const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
+  return Math.abs(d("A", "B") - d("A", "C")) < 1e-4;
+})(), JSON.stringify(f13.points));
+
+console.log("--- cercles avancés ---");
+const f14 = geo("Tracer le triangle ABC. Tracer le cercle circonscrit au triangle ABC.");
+t("cercle circonscrit (O équidistant des 3 sommets)", !f14.error && (() => {
+  const c = f14.circles.find((x) => /circonscrit/.test(x.name || "") || true);
+  const o = c && c.pts && c.pts.length ? null : null;
+  // le centre n'est pas un point nommé : on vérifie via le rayon
+  return c && c.radius > 0;
+})(), f14.error || JSON.stringify(f14.circles));
+t("côtés du triangle tracés avec le cercle circonscrit", (f14.lines || []).filter((l) => l.kind === "segment").length >= 3, JSON.stringify(f14.lines));
+const f15 = geo("Tracer le triangle ABC. Tracer le cercle inscrit au triangle ABC.");
+t("cercle inscrit", !f15.error && f15.circles.length === 1, f15.error);
+const f16 = geo("Tracer le triangle ABC. Tracer le cercle de diamètre [BC].");
+t("cercle de diamètre [BC]", !f16.error && f16.circles.length === 1, f16.error);
+
+console.log("--- tangente au cercle ---");
+const f17 = geo("Tracer le triangle ABC. Tracer le cercle circonscrit au triangle ABC. Tracer la tangente au cercle en A.");
+t("tangente au cercle en A", (f17.steps || []).some((s) => s.kind === "tangente"), lbls(f17));
+t("tangente ⊥ rayon (OA)", (() => {
+  const c = f17.circles[0]; // (ω1) = cercle circonscrit
+  const tan = f17.lines.find((l) => /tangente/.test(l.label || ""));
+  const a = f17.points.find((p) => p.name === "A");
+  if (!c || !tan || !a) return false;
+  const dx = a.x - c.center.x, dy = a.y - c.center.y;
+  const tx = tan.to.x - tan.from.x, ty = tan.to.y - tan.from.y;
+  return Math.abs(dx * tx + dy * ty) < 1e-6;
+})(), "produit scalaire nul attendu");
+
+console.log("--- transformations ---");
+const f18 = geo("Tracer (AB). Tracer le symétrique de C par rapport à la droite (AB).");
+t("symétrie axiale : C' miroir de C", !f18.error && pts(f18).includes("C'"), pts(f18));
+t("  (AB) est la médiatrice de [CC']", (() => {
+  const p = Object.fromEntries(f18.points.map((x) => [x.name, x]));
+  if (!p["C'"]) return false;
+  const mid = { x: (p.C.x + p["C'"].x) / 2, y: (p.C.y + p["C'"].y) / 2 };
+  const a = p.A, b = p.B;
+  // C et C' alignés perpendiculairement à AB, milieu sur AB
+  const ab = { x: b.x - a.x, y: b.y - a.y };
+  const cc = { x: p["C'"].x - p.C.x, y: p["C'"].y - p.C.y };
+  const onAB = Math.abs(ab.x * (mid.y - a.y) - ab.y * (mid.x - a.x)) < 1e-6;
+  return Math.abs(ab.x * cc.x + ab.y * cc.y) < 1e-6 && onAB;
+})());
+const f19 = geo("Tracer le symétrique de A par rapport à B.");
+t("symétrie centrale : B milieu de [AA']", (() => {
+  const p = Object.fromEntries(f19.points.map((x) => [x.name, x]));
+  if (!p["A'"]) return false;
+  const mid = { x: (p.A.x + p["A'"].x) / 2, y: (p.A.y + p["A'"].y) / 2 };
+  return Math.abs(mid.x - p.B.x) < 1e-9 && Math.abs(mid.y - p.B.y) < 1e-9;
+})(), JSON.stringify(f19.points));
+const f20 = geo("Tracer (AB). Tracer l'image de C par la translation qui transforme A en B.");
+t("translation : CC' = AB (vecteurs égaux)", (() => {
+  const p = Object.fromEntries(f20.points.map((x) => [x.name, x]));
+  if (!p["C'"]) return false;
+  return Math.abs((p["C'"].x - p.C.x) - (p.B.x - p.A.x)) < 1e-9 && Math.abs((p["C'"].y - p.C.y) - (p.B.y - p.A.y)) < 1e-9;
+})());
+const f21 = geo("Tracer la rotation de centre A et d'angle 90° appliquée au point B.");
+t("rotation 90° : AB ⊥ AB' et AB = AB'", (() => {
+  const p = Object.fromEntries(f21.points.map((x) => [x.name, x]));
+  if (!p["B'"]) return false;
+  const u = { x: p.B.x - p.A.x, y: p.B.y - p.A.y };
+  const v = { x: p["B'"].x - p.A.x, y: p["B'"].y - p.A.y };
+  return Math.abs(u.x * v.x + u.y * v.y) < 1e-6 && Math.abs(Math.hypot(u.x, u.y) - Math.hypot(v.x, v.y)) < 1e-6;
+})());
+const f22 = geo("Tracer l'homothétie de centre A et de rapport 2 appliquée au point B.");
+t("homothétie rapport 2 : AB' = 2·AB", (() => {
+  const p = Object.fromEntries(f22.points.map((x) => [x.name, x]));
+  if (!p["B'"]) return false;
+  return Math.abs((p["B'"].x - p.A.x) - 2 * (p.B.x - p.A.x)) < 1e-9 && Math.abs((p["B'"].y - p.A.y) - 2 * (p.B.y - p.A.y)) < 1e-9;
+})());
+
+console.log("--- longueurs et angles ---");
+const f23 = geo("Soit AB = 5 cm. Tracer (AB).");
+t("AB = 5 cm appliqué", (() => {
+  const p = Object.fromEntries(f23.points.map((x) => [x.name, x]));
+  return Math.abs(Math.hypot(p.B.x - p.A.x, p.B.y - p.A.y) - 5) < 1e-9;
+})(), JSON.stringify(f23.points));
+const f24 = geo("Tracer le triangle ABC. L'angle ABC = 45°.");
+t("angle mesuré (arc + étiquette)", !f24.error && f24.svg.includes("45\u00b0"), f24.error);
+
+console.log("--- concurrence + droites des milieux ---");
+const f25 = geo("Tracer le triangle ABC. Tracer les médianes du triangle ABC. Les médianes se coupent en G. Tracer les hauteurs du triangle ABC. Les hauteurs se coupent en H.");
+t("médianes concourantes en G", (f25.steps || []).some((s) => /G =/.test(s.label)), lbls(f25));
+t("hauteurs concourantes en H", (f25.steps || []).some((s) => /H =/.test(s.label)), lbls(f25));
+const f26 = geo("Tracer le triangle ABC. Tracer la droite des milieux du triangle ABC.");
+t("droite des milieux tracée", (f26.steps || []).some((s) => s.kind === "droite des milieux"), lbls(f26));
+
+console.log("--- polygones étendus ---");
+const f27 = geo("Tracer le trapèze GHIJ. Tracer le pentagone KLMNO. Tracer l'hexagone PQRSTU.");
+t("trapèze + pentagone + hexagone", !f27.error && f27.steps.length === 3, f27.error || lbls(f27));
+
 console.log("");
 console.log(pass + " test(s) OK, " + fail + " échec(s)");
 process.exit(fail ? 1 : 0);

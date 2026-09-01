@@ -236,18 +236,25 @@ GET  /api/geo?text=Soit+A+et+B+deux+points.+1)+Tracer+(AB).+2)+Placer+un+point+P
 POST /api/geo  { "text": "Tracer le triangle ABC. Tracer la hauteur issue de A." }
 ```
 
-Constructions reconnues (en français) :
+Constructions reconnues (en français) — **tous les cas de la géométrie scolaire** :
 
 | Construction | Exemple |
 |---|---|
 | Droite / segment / demi-droite | « Tracer (AB) », « le segment [AB] », « la demi-droite [BC) », « la droite passant par A et B » |
 | Point sur une droite/segment/cercle | « Placer un point P sur (AB) », « P ∈ (AB) », « Soit P un point de (AB) », « P appartient à (AB) » |
-| Perpendiculaire / parallèle | « la droite passant par P perpendiculaire à (AB) » (marque d'angle droit ∟), « la parallèle à (AB) passant par C » |
-| Cercle | « cercle de centre O passant par B », « cercle de centre O de rayon 3 cm » |
+| Perpendiculaire / parallèle | « la droite passant par P perpendiculaire à (AB) » (∟), « la perpendiculaire en P » (dernière droite), « la parallèle à (AB) passant par C » |
+| Cercle | « de centre O passant par B », « de rayon 3 cm », « de diamètre [AB] », « circonscrit au triangle ABC », « inscrit au triangle ABC » |
+| Tangente au cercle | « la tangente au cercle (C) en A » |
 | Milieu / médiatrice | « Soit M le milieu de [AB] », « la médiatrice de [AB] » |
-| Médiane / hauteur / bissectrice | « la médiane issue de A du triangle ABC », « la hauteur issue de A », « la bissectrice de l'angle ABC » |
-| Triangle / quadrilatères | « le triangle ABC rectangle en A » (∟), « le carré ABCD », « le rectangle ABCD », « le losange », « le parallélogramme », « le quadrilatère ABCD » |
-| Intersection | « les droites (AB) et (CD) se coupent en M » |
+| Médiane / hauteur / bissectrice | « la médiane issue de A du triangle ABC », « la hauteur issue de A », « la bissectrice de l'angle ABC » — et les trois à la fois : « les médianes du triangle ABC » |
+| Concurrence | « les médianes se coupent en G » (idem hauteurs → H, bissectrices → I, médiatrices → O) |
+| Droite des milieux | « la droite des milieux du triangle ABC » |
+| Triangles contraints | « équilatéral », « isocèle en A », « rectangle en A » (∟) — sommets construits exactement |
+| Polygones | carré, rectangle, losange, parallélogramme, **trapèze**, quadrilatère, pentagone, hexagone |
+| Symétrie | « le symétrique de A par rapport à B » (centrale), « par rapport à la droite (BC) » (axiale) |
+| Translation / rotation / homothétie | « l'image de C par la translation qui transforme A en B », « la rotation de centre A et d'angle 90° appliquée au point B », « l'homothétie de centre A et de rapport 2 appliquée au point B » |
+| Longueurs | « Soit AB = 5 cm » |
+| Angles mesurés | « l'angle ABC = 45° » (arc + étiquette) |
 
 - Points créés automatiquement (positions par défaut lisibles par lettre).
 - Chaque étape est dessinée dans une couleur différente + **légende des étapes**
