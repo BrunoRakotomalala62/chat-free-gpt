@@ -223,6 +223,43 @@ acceptées (`2x-3`, `y=-x+1`, `0.5x`, `x+2`) ; `x²`, `sin(x)`, produits → 400
 `ln`, `log`, `sqrt`, `sin`, `cos`, `tan`, `sinh`, `cosh`, … avec asymptotes,
 branches et tangentes comme pour les fonctions rationnelles.
 
+---
+
+## 📐 Constructions géométriques : `/api/geo`
+
+Moteur **déterministe** (aucune hallucination IA) : il interprète un énoncé
+d'exercice avec **questions successives** et construit **UNE figure exacte et
+cumulative** — chaque question ajoute son élément.
+
+```
+GET  /api/geo?text=Soit+A+et+B+deux+points.+1)+Tracer+(AB).+2)+Placer+un+point+P+sur+(AB).+3)+Tracer+la+droite+passant+par+P+perpendiculaire+à+(AB).
+POST /api/geo  { "text": "Tracer le triangle ABC. Tracer la hauteur issue de A." }
+```
+
+Constructions reconnues (en français) :
+
+| Construction | Exemple |
+|---|---|
+| Droite / segment / demi-droite | « Tracer (AB) », « le segment [AB] », « la demi-droite [BC) », « la droite passant par A et B » |
+| Point sur une droite/segment/cercle | « Placer un point P sur (AB) », « P ∈ (AB) », « Soit P un point de (AB) », « P appartient à (AB) » |
+| Perpendiculaire / parallèle | « la droite passant par P perpendiculaire à (AB) » (marque d'angle droit ∟), « la parallèle à (AB) passant par C » |
+| Cercle | « cercle de centre O passant par B », « cercle de centre O de rayon 3 cm » |
+| Milieu / médiatrice | « Soit M le milieu de [AB] », « la médiatrice de [AB] » |
+| Médiane / hauteur / bissectrice | « la médiane issue de A du triangle ABC », « la hauteur issue de A », « la bissectrice de l'angle ABC » |
+| Triangle / quadrilatères | « le triangle ABC rectangle en A » (∟), « le carré ABCD », « le rectangle ABCD », « le losange », « le parallélogramme », « le quadrilatère ABCD » |
+| Intersection | « les droites (AB) et (CD) se coupent en M » |
+
+- Points créés automatiquement (positions par défaut lisibles par lettre).
+- Chaque étape est dessinée dans une couleur différente + **légende des étapes**
+  en bas de la figure (« 1) droite (AB) 2) point P sur (AB) 3) (d) ⊥ (AB)… »).
+- Les étapes non reconnues sont ignorées (la figure montre ce qui est compris) ;
+  si aucune n'est reconnue → HTTP 400 avec des exemples.
+- Réponse : `{ success, svg, steps, points, lines, circles }`.
+
+```bash
+curl "https://chat-free-gpt.vercel.app/api/geo?text=Tracer%20le%20triangle%20ABC%2C%20puis%20la%20hauteur%20issue%20de%20A."
+```
+
 | Paramètre | Type | Description |
 |---|---|---|
 | `expression` (alias `expr`, `f`) | string | Fonction à tracer (mode courbe). Préfixe accepté : `f(x)=x-2lnx` |
@@ -349,13 +386,17 @@ node test-plot.js     # teste le moteur de figures (parser, domaine auto, SVG)
 ```
 api/chat.js        → fonction serverless Vercel (GET + POST /api/chat)
 api/plot.js        → fonction serverless Vercel (GET + POST /api/plot, alias /api/figure)
+api/geo.js         → fonction serverless Vercel (GET + POST /api/geo — constructions géométriques)
 lib/handler.js     → logique HTTP commune de /api/chat (CORS, GET, POST JSON, erreurs)
 lib/plot.js        → moteur de courbes : parser d'expressions, échantillonnage, SVG (zéro dépendance)
 lib/figures-ai.js  → génération de figures par IA : prompt, extraction/assainissement/validation SVG, repli multi-modèles
 lib/plot-handler.js→ logique HTTP commune de /api/plot (CORS, GET, POST, modes expression/subject, formats)
+lib/geometry.js    → moteur géométrique déterministe : interprétation de l'énoncé + constructions SVG
+lib/geo-handler.js → logique HTTP commune de /api/geo
 lib/aichatting.js  → client du backend aichatting (vToken RSA, conversation, SSE, vision, chatReliable)
-server.js          → serveur local de test (zéro dépendance) — routes chat + plot
+server.js          → serveur local de test (zéro dépendance) — routes chat + plot + geo
 test.js            → test automatisé des modèles + vision (node test.js --vision)
 test-plot.js       → test automatisé du moteur de courbes (node test-plot.js)
+test-geo.js        → test automatisé du moteur géométrique (node test-geo.js)
 vercel.json        → configuration Vercel (routes + maxDuration)
 ```
