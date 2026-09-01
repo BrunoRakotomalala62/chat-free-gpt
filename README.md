@@ -236,7 +236,17 @@ GET  /api/geo?text=Soit+A+et+B+deux+points.+1)+Tracer+(AB).+2)+Placer+un+point+P
 POST /api/geo  { "text": "Tracer le triangle ABC. Tracer la hauteur issue de A." }
 ```
 
-Constructions reconnues (en français) — **tous les cas de la géométrie scolaire** :
+**Vérification IA de la construction** (depuis 2026-09) : après le tracé exact,
+un modèle IA contrôle que la figure couvre **toutes** les constructions de
+l'énoncé (dimensions données « tel que AB = 4 cm, AC = 5 cm, BC = 6 cm »,
+points à placer, angles mesurés, transformations…). Si des éléments manquent,
+l'IA **refait la figure complète** et les ajoute (réponse `mode: "ia"` avec
+la liste des manques dans `verification.manquant`) ; sinon la figure exacte
+est renvoyée (`mode: "exact"`, `verification.complet: true`). La vérification
+est **non bloquante** : si l'IA est indisponible, la figure exacte est
+renvoyée telle quelle. Paramètres : `ia=0` (pas de repli IA), `verif=0`
+(pas de vérification IA). `ignored` : phrases de l'énoncé que le moteur exact
+n'a pas pu construire (transmises au vérificateur).
 
 | Construction | Exemple |
 |---|---|

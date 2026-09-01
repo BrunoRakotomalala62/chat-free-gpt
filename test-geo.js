@@ -215,6 +215,11 @@ t("hauteurs concourantes en H", (f25.steps || []).some((s) => /H =/.test(s.label
 const f26 = geo("Tracer le triangle ABC. Tracer la droite des milieux du triangle ABC.");
 t("droite des milieux tracée", (f26.steps || []).some((s) => s.kind === "droite des milieux"), lbls(f26));
 
+console.log("--- étapes non reconnues (ignored) ---");
+const f30 = geo("Tracer (AB). Tracer le point d'intersection des cercles. Tracer l'orthocentre du triangle ABC.");
+t("étapes reconnues construites", f30.steps.length >= 1, lbls(f30));
+t("phrases non reconnues remontées (ignored)", Array.isArray(f30.ignored) && f30.ignored.some((s) => /intersection des cercles/.test(s)), JSON.stringify(f30.ignored));
+
 console.log("--- connecteurs « puis » / « ensuite » ---");
 const f28 = geo("Tracer le triangle ABC, puis la hauteur issue de A.");
 t("puis sépare les étapes", f28.steps.length === 2, lbls(f28));
