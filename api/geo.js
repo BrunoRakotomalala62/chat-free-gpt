@@ -11,7 +11,7 @@
 
 const { handleGeoRequest } = require("../lib/geo-handler");
 
-exports.maxDuration = 10; // Vercel : le tracé géométrique est instantané
+exports.maxDuration = 60; // Vercel : tracé exact instantané, repli IA jusqu'à ~50 s
 
 module.exports = async function handler(req, res) {
   try {
