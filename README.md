@@ -110,15 +110,15 @@ GET /api/plot?expression=1/(x^2+1)&format=svg          → figure brute (image/s
 GET /api/plot?expression=tan(x)&format=points         → juste les points [[x,y],…]
 POST /api/plot                                        → même chose, en JSON
 { "expression": "x - 2*ln(x)", "xmin": 0.1, "xmax": 10 }
-{ "subject": "appareil de distillation simple en chimie", "model": "gpt-5" }
+{ "subject": "appareil de distillation simple en chimie" }
 ```
 
 ### 🎨 Mode dynamique par IA : n'importe quelle figure
 
-Le sujet libre est envoyé à un modèle de langage (repli automatique entre
-`gpt-5.6-luna`, `gpt-5`, `deepseek-chat`, `gemini-2.0-flash`) avec une consigne
-de dessinateur : l'API extrait, **assainit** (anti-XSS) et **valide** le SVG
-(balances XML) avant de le renvoyer. Exemples testés :
+Le sujet libre est envoyé au modèle de langage gratuit du backend
+(`gpt-5.6-luna`, tentatives renouvelées avec un visiteur neuf en cas d'échec)
+avec une consigne de dessinateur : l'API extrait, **assainit** (anti-XSS) et
+**valide** le SVG (balances XML) avant de le renvoyer. Exemples testés :
 
 - « mise en évidence de l'effet photoélectrique » → tube sous vide, cathode,
   anode, faisceau lumineux, ampèremètre μA, générateur
@@ -143,8 +143,8 @@ curl "https://chat-free-gpt.vercel.app/api/plot?subject=mise%20en%20%C3%A9videnc
 
 - La figure est volontairement **compacte** (le backend gratuit tronque les
   réponses au-delà d'environ 2600 caractères) : schéma simplifié à l'essentiel.
-- Si un modèle échoue (timeout, 504, SVG invalide), l'API **réessaie avec les
-  modèles suivants** ; en cas d'échec total → HTTP 502 avec un message clair.
+- Si la génération échoue (timeout, 504, SVG invalide), l'API **réessaie avec
+  un visiteur neuf** ; en cas d'échec total → HTTP 502 avec un message clair.
 - `format=svg` renvoie la figure brute ; `format=points` n'existe que pour les courbes.
 
 ### Exemple — la courbe de `f(x) = x − 2·ln(x)`
@@ -281,7 +281,7 @@ curl "https://chat-free-gpt.vercel.app/api/geo?text=Tracer%20le%20triangle%20ABC
 |---|---|---|
 | `expression` (alias `expr`, `f`) | string | Fonction à tracer (mode courbe). Préfixe accepté : `f(x)=x-2lnx` |
 | `subject` (alias `figure`, `description`, `topic`) | string | Sujet libre de la figure (mode IA) — ex. « effet photoélectrique » |
-| `model` | string | Modèle IA pour `subject=` (défaut `gpt-5.6-luna`, repli auto sur gpt-5, deepseek-chat, gemini-2.0-flash) |
+| `model` | string | Modèle IA pour `subject=` (défaut `gpt-5.6-luna` — seul modèle gratuit authentique ; les autres noms sont rejetés) |
 | `xmin`, `xmax` | number | Domaine — par défaut **détection automatique** (ex. `ln(x)` → x>0) |
 | `ymin`, `ymax` | number | Échelle verticale — par défaut auto (percentiles, ignore les pics) |
 | `width`, `height` | number | Taille de la figure en px (défaut `800×600`, max 2400×1600) |
@@ -312,17 +312,26 @@ Conventions mathématiques usuelles, **sans `eval`** (parser sûr) :
 > pour obtenir la figure. Pour la tangente : « trace la courbe de f(x)=x²-2x+1
 > et la tangente au point d'abscisse 2 » → `/api/plot?expression=x^2-2x+1&tangent=2`.
 
-## Modèles testés
+## Modèles testés (mise à jour 2026-09-05)
 
 Le site n'expose officiellement que deux modèles (`gpt-5.6-luna` gratuit et
-`gpt-5.6-terra` réservé aux membres PRO), mais le backend accepte de nombreux
-autres noms. Résultats des tests effectués (chaque nom testé avec un visiteur
-neuf, prompt « dis juste bonjour ») :
+`gpt-5.6-terra` réservé aux membres PRO), et le backend ne fait tourner en
+réalité **qu'un seul moteur gratuit** : `gpt-5.6-luna` (qui s'identifie
+lui-même comme ChatGPT / OpenAI).
 
-### ✅ Fonctionnent en gratuit
+Nous avons retesté **tous** les noms autrefois listés (38 noms) en posant la
+question « qui es-tu ? Donne le nom exact de ton modèle » à chacun, avec un
+visiteur neuf :
 
-`gpt-5.6-luna`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5.1`, `gpt-5.1-mini`,
-`gpt-5.1-nano`, `gpt-5.2`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-4.1`, `gpt-4.1-mini`,
+### ✅ Le seul modèle gratuit authentique
+
+`gpt-5.6-luna` → répond « Je suis ChatGPT, un modèle d'IA d'OpenAI » :
+c'est le modèle officiel gratuit du site, il fonctionne.
+
+### ❌ Anciens noms supprimés (alias trompeurs)
+
+`gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5.1`, `gpt-5.1-mini`, `gpt-5.1-nano`,
+`gpt-5.2`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-4.1`, `gpt-4.1-mini`,
 `gpt-4.1-nano`, `gpt-4`, `gpt-3.5-turbo`, `o1`, `o1-mini`, `o3`, `o3-mini`,
 `o4-mini`, `deepseek-chat`, `deepseek-reasoner`, `deepseek-v3`, `deepseek-r1`,
 `claude-3-5-sonnet-20241022`, `claude-sonnet-4-20250514`, `claude-3-5-haiku`,
@@ -330,15 +339,17 @@ neuf, prompt « dis juste bonjour ») :
 `gemini-2.5-pro`, `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `grok-2`,
 `grok-3`, `qwen2.5-72b-instruct`, `mixtral-8x7b-instruct`
 
-> Note : le backend retombe sur un modèle par défaut pour les noms inconnus —
-> le paramètre `model` est donc transmis mais la réponse peut venir du même
-> modèle sous-jacent selon le nom choisi.
+→ interrogés avec « qui es-tu ? », **tous** répondent « ChatGPT / créé par
+OpenAI » (plusieurs déclarent même « je suis le modèle GPT-5 »). Ces noms ne
+font **pas** tourner le modèle annoncé : le backend les accepte et retombe
+silencieusement sur le moteur gratuit par défaut. Ils ont donc été **retirés**
+de l'API (`model=` hors liste → HTTP 400 avec la liste des modèles valides).
 
 ### 🔒 Réservés aux membres PRO
 
 `gpt-5.6-terra`, `gpt-4o` → réponse HTTP **402** avec le message du backend :
 *« You are currently not a pro premium member. Please purchase a pro premium
-membership before using it. »*
+membership before using it. »* (modèles réels, mais payants).
 
 ## Comment ça marche (reverse engineering)
 
@@ -406,7 +417,7 @@ api/plot.js        → fonction serverless Vercel (GET + POST /api/plot, alias /
 api/geo.js         → fonction serverless Vercel (GET + POST /api/geo — constructions géométriques)
 lib/handler.js     → logique HTTP commune de /api/chat (CORS, GET, POST JSON, erreurs)
 lib/plot.js        → moteur de courbes : parser d'expressions, échantillonnage, SVG (zéro dépendance)
-lib/figures-ai.js  → génération de figures par IA : prompt, extraction/assainissement/validation SVG, repli multi-modèles
+lib/figures-ai.js  → génération de figures par IA : prompt, extraction/assainissement/validation SVG, retries visiteur neuf
 lib/plot-handler.js→ logique HTTP commune de /api/plot (CORS, GET, POST, modes expression/subject, formats)
 lib/geometry.js    → moteur géométrique déterministe : interprétation de l'énoncé + constructions SVG
 lib/geo-handler.js → logique HTTP commune de /api/geo

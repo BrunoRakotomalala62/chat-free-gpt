@@ -3,7 +3,7 @@
  *
  *   node test.js                 # modèles gratuits (FREE_MODELS)
  *   node test.js --all           # gratuits + modèles PRO
- *   node test.js --vision [url]  # vision : gpt-5.6-luna + claude sonnet 4
+ *   node test.js --vision [url]  # vision : gpt-5.6-luna
  *
  * Chaque modèle est testé avec un visiteur neuf (quota gratuit).
  */
@@ -18,7 +18,7 @@ async function testVision() {
     process.argv[idx + 1] && !process.argv[idx + 1].startsWith("--")
       ? process.argv[idx + 1]
       : "https://http.cat/200.jpg";
-  const models = ["gpt-5.6-luna", "claude-sonnet-4-20250514"];
+  const models = ["gpt-5.6-luna"];
   console.log(`🖼️  Test vision (${imgUrl}) sur ${models.length} modèles...\n`);
   let ok = 0;
   for (const model of models) {
