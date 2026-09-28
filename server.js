@@ -14,6 +14,16 @@ const { handleChatRequest } = require("./lib/handler");
 const { handlePlotRequest } = require("./lib/plot-handler"); // route /api/plot (figures)
 const { handleGeoRequest } = require("./lib/geo-handler");   // route /api/geo (géométrie)
 
+// Routes vocales (additif) — les mêmes wrappers que les fonctions Vercel,
+// pour que le comportement local soit identique au déploiement.
+const voiceRoutes = {
+  "/api/tts": require("./api/tts"),
+  "/api/stt": require("./api/stt"),
+  "/api/voice": require("./api/voice"),
+  "/api/voices": require("./api/voices"),
+  "/api/health": require("./api/health"),
+};
+
 const PORT = process.env.PORT || 3000;
 
 const server = http.createServer((req, res) => {
@@ -44,6 +54,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Routes vocales (additif) — la logique du chat ci-dessous est inchangée.
+  const voiceRoute = voiceRoutes[pathname] || voiceRoutes[pathname.replace(/\/+$/, "")];
+  if (voiceRoute) {
+    Promise.resolve(voiceRoute(req, res)).catch((err) => {
+      const message = String(err && err.message ? err.message : err);
+      try {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ success: false, error: message }));
+      } catch (e) {
+        /* socket déjà fermé */
+      }
+    });
+    return;
+  }
+
   handleChatRequest(req, res).catch((err) => {
     const message = String(err && err.message ? err.message : err);
     try {
@@ -61,4 +86,6 @@ server.listen(PORT, () => {
   console.log(`POST : http://localhost:${PORT}/api/chat  (JSON { prompt, model, images })`);
   console.log(`Figures : GET http://localhost:${PORT}/api/plot?expression=x-2ln(x)`);
   console.log(`Géométrie : GET http://localhost:${PORT}/api/geo?text=Soit%20A%20et%20B%20deux%20points.%201)%20Tracer%20(AB).`);
+  console.log(`Voix  : GET  http://localhost:${PORT}/api/tts?text=Bonjour&voice=fr-FR-DeniseNeural`);
+  console.log(`Voix  : POST http://localhost:${PORT}/api/voice  (multipart { audio } -> transcript + réponse + MP3)`);
 });
