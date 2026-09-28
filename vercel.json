@@ -9,6 +9,21 @@
     },
     "api/geo.js": {
       "maxDuration": 60
+    },
+    "api/tts.js": {
+      "maxDuration": 60
+    },
+    "api/stt.js": {
+      "maxDuration": 60
+    },
+    "api/voice.js": {
+      "maxDuration": 60
+    },
+    "api/voices.js": {
+      "maxDuration": 30
+    },
+    "api/health.js": {
+      "maxDuration": 15
     }
   },
   "routes": [
@@ -23,6 +38,26 @@
     {
       "src": "/api/geo",
       "dest": "/api/geo.js"
+    },
+    {
+      "src": "/api/tts",
+      "dest": "/api/tts.js"
+    },
+    {
+      "src": "/api/stt",
+      "dest": "/api/stt.js"
+    },
+    {
+      "src": "/api/voice",
+      "dest": "/api/voice.js"
+    },
+    {
+      "src": "/api/voices",
+      "dest": "/api/voices.js"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/health.js"
     }
   ]
 }

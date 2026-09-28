@@ -7,6 +7,11 @@ construit des **figures en SVG** : courbes mathématiques (`expression=`) **ou
 n'importe quelle figure par IA** (`subject=` — physique, chimie, circuits
 électriques…). Déployable tel quel sur **Vercel**.
 
+Des **routes vocales** (additives, sans toucher au chat) complètent l'API :
+`/api/tts` (texte → MP3, **sans clé**), `/api/stt` (audio → texte, Whisper),
+`/api/voice` (audio → texte → réponse → voix) et `/api/voices`. Voir la section
+[🎙️ Routes vocales](#-routes-vocales--api-tts-api-stt-api-voice).
+
 > ⚠️ Projet à but éducatif. Non affilié à aichatting.net. Le backend gratuit
 > octroie ~2 messages par visiteur : l'API génère un nouveau visiteur à
 > chaque requête, ce qui la rend utilisable en continu.
@@ -312,6 +317,113 @@ Conventions mathématiques usuelles, **sans `eval`** (parser sûr) :
 > pour obtenir la figure. Pour la tangente : « trace la courbe de f(x)=x²-2x+1
 > et la tangente au point d'abscisse 2 » → `/api/plot?expression=x^2-2x+1&tangent=2`.
 
+## 🎙️ Routes vocales : `/api/tts`, `/api/stt`, `/api/voice`
+
+> Ces routes sont **indépendantes du chat** : elles ne modifient aucune logique
+> existante. Le TTS (Microsoft Edge « Read Aloud ») ne demande **aucune clé** ;
+> seules la transcription (STT) et la réponse (LLM) ont besoin d'un fournisseur.
+
+### Où est le STT / le LLM ?
+
+| Étape | Fournisseur | Clé |
+|---|---|---|
+| **TTS** (texte → voix) | Microsoft Edge | **aucune, sans quota connu** |
+| **STT** (audio → texte) | Groq `whisper-large-v3-turbo` | `GROQ_API_KEY` (gratuit) |
+| **LLM** (texte → réponse) | Groq, via la **même clé** · ou ton `/api/chat` via `CHAT_ENDPOINT` · ou `none` | selon le mode |
+
+Définis `GROQ_API_KEY` (gratuit, <https://console.groq.com/keys>) — une seule
+clé couvre le STT **et** le LLM. Sans aucune clé, `/api/tts` fonctionne déjà seul.
+
+### `GET|POST /api/tts` — texte → MP3 *(sans clé)*
+
+```bash
+curl "http://localhost:3000/api/tts?text=Bonjour&voice=fr-FR-DeniseNeural" -o bonjour.mp3
+
+curl -X POST http://localhost:3000/api/tts -H "Content-Type: application/json" \
+  -d '{"text":"Bonjour !","voice":"fr-FR-HenriNeural","rate":"+10%"}' -o bonjour.mp3
+
+# réponse JSON (base64 + sous-titres mot à mot)
+curl -X POST "http://localhost:3000/api/tts?format=json" -H "Content-Type: application/json" -d '{"text":"Bonjour"}'
+```
+
+Paramètres : `text` (requis, max 3 000 car.), `voice`, `rate` (`+20%`), `pitch` (`+5Hz`),
+`volume` (`+50%`), `format` (`audio` par défaut, `json` pour du base64).
+
+### `POST /api/stt` — audio → texte
+
+Trois formats d'entrée au choix :
+
+```bash
+# a) multipart/form-data (navigateur)
+curl -X POST http://localhost:3000/api/stt -F "audio=@question.wav" -F "language=fr"
+
+# b) corps brut
+curl -X POST http://localhost:3000/api/stt -H "Content-Type: audio/wav" --data-binary @question.wav
+
+# c) JSON base64 (data-URI acceptée)
+curl -X POST http://localhost:3000/api/stt -H "Content-Type: application/json" \
+  -d '{"audio":"data:audio/wav;base64,UklGRiQAAABXQVZFZm10..."}'
+```
+
+### `POST /api/voice` — la conversation vocale complète
+
+Un seul appel enchaîne **STT → LLM → TTS** :
+
+```bash
+curl -X POST http://localhost:3000/api/voice \
+  -F "audio=@question.wav" -F "language=fr" -F "voice=fr-FR-DeniseNeural" \
+  -F "system=Tu es un assistant bref et clair."
+```
+
+Réponse JSON (l'audio est renvoyé en base64, car une fonction serverless ne peut
+pas renvoyer deux corps binaires) :
+
+```json
+{
+  "success": true,
+  "transcript": "Quel temps fait-il ?",
+  "reply": "Je ne peux pas accéder à la météo en temps réel, mais…",
+  "voice": "fr-FR-DeniseNeural",
+  "mimeType": "audio/mpeg",
+  "audio": "//uQxAAA…",
+  "providers": { "stt": "groq", "llm": "groq", "tts": "edge" },
+  "timings": { "stt": 412, "llm": 655, "tts": 380, "total": 1447 }
+}
+```
+
+- `?format=audio` → renvoie le **MP3 brut** de la réponse (transcript et réponse
+  dans les en-têtes `X-Transcript` / `X-Reply`, encodés en JSON ASCII).
+- Champ `text` au lieu de `audio` → l'étape STT est sautée (utile si le client a
+  déjà transcrit avec la Web Speech API du navigateur).
+- `history` : JSON `[{"role":"user","content":"…"}]` pour garder le contexte.
+
+### `GET /api/voices` — liste des voix
+
+```bash
+curl "http://localhost:3000/api/voices?language=fr"
+curl "http://localhost:3000/api/voices?locale=fr-FR&gender=Female"
+```
+
+### `GET /api/health` — état des fournisseurs
+
+Renvoie le fournisseur STT/LLM/TTS actif, **sans jamais exposer les clés**.
+
+### Configuration des routes vocales
+
+| Variable | Rôle |
+|---|---|
+| `GROQ_API_KEY` | **Recommandé.** Active STT (Whisper) + LLM via Groq |
+| `STT_PROVIDER` | `groq` \| `openai` \| `mock` (auto par défaut) |
+| `STT_BASE_URL` / `STT_API_KEY` | Tout endpoint compatible OpenAI `/audio/transcriptions` |
+| `LLM_PROVIDER` | `groq` \| `openai` \| `chat-endpoint` \| `none` \| `mock` |
+| `CHAT_ENDPOINT` | Réutiliser un endpoint de chat gratuit (ex. l'API `/api/chat` de ce projet) comme LLM |
+| `LLM_PROVIDER=none` | Aucun LLM : `/api/voice` renvoie le transcript tel quel (STT + TTS suffisent) |
+| `TTS_VOICE` | Voix par défaut (défaut `fr-FR-DeniseNeural`) |
+| `API_KEY` | Optionnel : exige `?key=…` ou l'en-tête `x-api-key` |
+
+> 💡 Limite Vercel : corps de requête ≤ ~4,5 Mo (environ 1 à 2 minutes d'audio
+> compressé). Pour de longs enregistrements, découper côté client.
+
 ## Modèles testés (mise à jour 2026-09-05)
 
 Le site n'expose officiellement que deux modèles (`gpt-5.6-luna` gratuit et
@@ -407,6 +519,7 @@ curl "http://localhost:3000/api/plot?expression=sin(x)&format=svg"
 node test.js          # teste la liste FREE_MODELS (gratuits)
 node test.js --all    # inclut les modèles PRO (réponse attendue : message PRO)
 node test-plot.js     # teste le moteur de figures (parser, domaine auto, SVG)
+node test-voice.js    # teste les routes vocales (npm run test:voice)
 ```
 
 ## Structure
@@ -415,16 +528,27 @@ node test-plot.js     # teste le moteur de figures (parser, domaine auto, SVG)
 api/chat.js        → fonction serverless Vercel (GET + POST /api/chat)
 api/plot.js        → fonction serverless Vercel (GET + POST /api/plot, alias /api/figure)
 api/geo.js         → fonction serverless Vercel (GET + POST /api/geo — constructions géométriques)
+api/tts.js         → fonction serverless Vercel (GET + POST /api/tts — texte → MP3, sans clé)
+api/stt.js         → fonction serverless Vercel (POST /api/stt — audio → texte, Whisper)
+api/voice.js       → fonction serverless Vercel (POST /api/voice — STT → LLM → TTS)
+api/voices.js      → fonction serverless Vercel (GET /api/voices — liste des voix Edge)
+api/health.js      → fonction serverless Vercel (GET /api/health — état des fournisseurs)
 lib/handler.js     → logique HTTP commune de /api/chat (CORS, GET, POST JSON, erreurs)
 lib/plot.js        → moteur de courbes : parser d'expressions, échantillonnage, SVG (zéro dépendance)
 lib/figures-ai.js  → génération de figures par IA : prompt, extraction/assainissement/validation SVG, retries visiteur neuf
 lib/plot-handler.js→ logique HTTP commune de /api/plot (CORS, GET, POST, modes expression/subject, formats)
 lib/geometry.js    → moteur géométrique déterministe : interprétation de l'énoncé + constructions SVG
 lib/geo-handler.js → logique HTTP commune de /api/geo
+lib/edge-tts.js    → synthèse vocale Edge (réessais, délai max, cache des voix, validation)
+lib/providers.js   → fournisseurs STT (Whisper) et LLM (Groq / OpenAI / endpoint de chat libre)
+lib/http.js        → utilitaires HTTP (CORS, corps JSON/brut/multipart, réponses, erreurs typées)
+lib/route.js       → enveloppe commune des routes vocales (CORS + préflight + API_KEY + erreurs)
+lib/tts-handler.js · lib/stt-handler.js · lib/voice-handler.js · lib/meta-handler.js → logique des routes vocales
 lib/aichatting.js  → client du backend aichatting (vToken RSA, conversation, SSE, vision, chatReliable)
-server.js          → serveur local de test (zéro dépendance) — routes chat + plot + geo
+server.js          → serveur local de test (zéro dépendance) — routes chat + plot + geo + voix
 test.js            → test automatisé des modèles + vision (node test.js --vision)
 test-plot.js       → test automatisé du moteur de courbes (node test-plot.js)
 test-geo.js        → test automatisé du moteur géométrique (node test-geo.js)
+test-voice.js      → test automatisé des routes vocales (node test-voice.js)
 vercel.json        → configuration Vercel (routes + maxDuration)
 ```
