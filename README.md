@@ -312,6 +312,50 @@ Conventions mathématiques usuelles, **sans `eval`** (parser sûr) :
 > pour obtenir la figure. Pour la tangente : « trace la courbe de f(x)=x²-2x+1
 > et la tangente au point d'abscisse 2 » → `/api/plot?expression=x^2-2x+1&tangent=2`.
 
+## 📄 Endpoint PDF : `/api/pdf`
+
+Répond à une question à partir du contenu d'un PDF de **texte** (extraction
+avec `pdf-parse`, puis réponse via le même backend que `/api/chat`).
+
+```
+GET  /api/pdf?url=https://exemple.com/rapport.pdf&prompt=Quel%20est%20le%20budget%20%3F
+POST /api/pdf  { "pdf": "data:application/pdf;base64,…", "prompt": "Résume ce document." }
+POST /api/pdf  { "url": "https://exemple.com/rapport.pdf", "prompt": "…" }
+```
+
+| Paramètre | Type | Description |
+|---|---|---|
+| `url` | string | PDF distant à télécharger (≤ 20 Mo) |
+| `pdf` | string | PDF en data-URI base64 (POST, ≤ ~4,5 Mo — limite Vercel du corps) |
+| `prompt` | string | Question (défaut : « Résume ce document. ») |
+| `model` | string | Modèle IA (défaut `gpt-5.6-luna`) |
+
+- **PDF scannés / images** : aucun texte extractible → HTTP 422 (un OCR est nécessaire).
+- Le texte est plafonné à ~12 000 caractères ; pour un PDF long, il faut découper
+  ou sélectionner les passages pertinents avant l'appel.
+
+```bash
+curl "https://chat-free-gpt.vercel.app/api/pdf?url=https://…/doc.pdf&prompt=Résume%20ce%20document"
+```
+
+## 🌐 Endpoint scraping : `/api/scrape`
+
+Télécharge une page web, en extrait le texte (**sans dépendance**), puis répond
+optionnellement à une question à partir de ce contenu.
+
+```
+GET  /api/scrape?url=https://exemple.com               → texte extrait
+GET  /api/scrape?url=https://exemple.com&prompt=Résume → réponse IA
+POST /api/scrape  { "url": "https://exemple.com", "prompt": "…" }
+```
+
+- Ne voit pas les sites rendus en JavaScript (SPA) — il faudrait un navigateur headless.
+- Les URL internes (`localhost`, IP privées, métadonnées cloud) sont **refusées** (garde-fou SSRF).
+
+> Ces deux routes sont **additives** : elles n'altèrent pas la logique de `/api/chat`,
+> `/api/plot` et `/api/geo` ; elles réutilisent `chatReliable()` et `collectBody()`
+> par simple import.
+
 ## Modèles testés (mise à jour 2026-09-05)
 
 Le site n'expose officiellement que deux modèles (`gpt-5.6-luna` gratuit et
@@ -389,8 +433,10 @@ reproduit ce comportement (`toDataUri` dans `lib/aichatting.js`).
 npx vercel --prod
 ```
 
-`vercel.json` configure les routes `/api/chat` (vers `api/chat.js`, `maxDuration` 60 s)
-et `/api/plot` + `/api/figure` (vers `api/plot.js`, `maxDuration` 10 s).
+`vercel.json` configure les routes `/api/chat` (vers `api/chat.js`), `/api/plot`
++ `/api/figure` (vers `api/plot.js`), `/api/geo`, puis `/api/pdf` et `/api/scrape`
+(`maxDuration` 60 s chacune). ⚠️ Comme `vercel.json` déclare un tableau `routes`
+explicite, toute nouvelle route `api/*.js` **doit** y être ajoutée pour être exposée.
 
 ## Test en local
 
