@@ -9,6 +9,12 @@
     },
     "api/geo.js": {
       "maxDuration": 60
+    },
+    "api/pdf.js": {
+      "maxDuration": 60
+    },
+    "api/scrape.js": {
+      "maxDuration": 60
     }
   },
   "routes": [
@@ -23,6 +29,14 @@
     {
       "src": "/api/geo",
       "dest": "/api/geo.js"
+    },
+    {
+      "src": "/api/pdf",
+      "dest": "/api/pdf.js"
+    },
+    {
+      "src": "/api/scrape",
+      "dest": "/api/scrape.js"
     }
   ]
 }

@@ -13,6 +13,8 @@ const http = require("http");
 const { handleChatRequest } = require("./lib/handler");
 const { handlePlotRequest } = require("./lib/plot-handler"); // route /api/plot (figures)
 const { handleGeoRequest } = require("./lib/geo-handler");   // route /api/geo (géométrie)
+const { handlePdfRequest } = require("./lib/pdf-handler");   // route /api/pdf (PDF)
+const { handleScrapeRequest } = require("./lib/scrape-handler"); // route /api/scrape (web)
 
 const PORT = process.env.PORT || 3000;
 
@@ -33,6 +35,31 @@ const server = http.createServer((req, res) => {
   }
   if (pathname === "/api/geo") {
     handleGeoRequest(req, res).catch((err) => {
+      const message = String(err && err.message ? err.message : err);
+      try {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ success: false, error: message }));
+      } catch (e) {
+        /* socket déjà fermé */
+      }
+    });
+    return;
+  }
+
+  if (pathname === "/api/pdf") {
+    handlePdfRequest(req, res).catch((err) => {
+      const message = String(err && err.message ? err.message : err);
+      try {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ success: false, error: message }));
+      } catch (e) {
+        /* socket déjà fermé */
+      }
+    });
+    return;
+  }
+  if (pathname === "/api/scrape") {
+    handleScrapeRequest(req, res).catch((err) => {
       const message = String(err && err.message ? err.message : err);
       try {
         res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
