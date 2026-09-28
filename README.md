@@ -424,6 +424,34 @@ Renvoie le fournisseur STT/LLM/TTS actif, **sans jamais exposer les clés**.
 > 💡 Limite Vercel : corps de requête ≤ ~4,5 Mo (environ 1 à 2 minutes d'audio
 > compressé). Pour de longs enregistrements, découper côté client.
 
+## ⏱️ Budget de temps (pourquoi l'API ne reste jamais bloquée)
+
+Une fonction Vercel de ce projet est coupée à **60 s** (`maxDuration` dans
+`vercel.json`). Si le backend gratuit aichatting ralentit, une requête doit donc
+**rendre la main avant**, avec une vraie erreur JSON — sinon la requête meurt en
+silence et le navigateur attend son propre délai (90 s) avant d'afficher une
+erreur trompeuse (« impossible de joindre l'API »).
+
+C'est pourquoi `lib/aichatting.js` fixe un **budget global de 45 s**
+(`REQUEST_BUDGET_MS`), **partagé par toutes les étapes** d'une même requête :
+
+```
+création de conversation  +  téléchargement des images  +  flux SSE  ≤  45 s
+```
+
+- Le flux SSE reçoit « ce qu'il reste » du budget, jamais 100 s comme avant.
+- `chatReliable()` **partage** le même budget entre sa 1re tentative et le réessai
+  (visiteur neuf) : les deux tiennent ensemble dans les 45 s.
+- Tout dépassement, à n'importe quelle étape, renvoie un message clair :
+  *« Le modèle met trop de temps à répondre (délai dépassé). Réessayez, ou posez
+  une question plus courte. »*
+  ⚠️ Piège : `AbortSignal.timeout()` rejette une **`TimeoutError`**, pas une
+  `AbortError` — les deux doivent être testées.
+- Surchargeable : `CHAT_BUDGET_MS` (ex. `60000` sur un plan Vercel Pro).
+
+Les routes vocales suivent la même règle : `lib/providers.js` limite les appels
+amont à **45 s** (`UPSTREAM_TIMEOUT_MS`).
+
 ## Modèles testés (mise à jour 2026-09-05)
 
 Le site n'expose officiellement que deux modèles (`gpt-5.6-luna` gratuit et
