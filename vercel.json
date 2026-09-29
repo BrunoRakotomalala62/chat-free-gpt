@@ -24,6 +24,12 @@
     },
     "api/health.js": {
       "maxDuration": 15
+    },
+    "api/image-edit.js": {
+      "maxDuration": 60
+    },
+    "api/image-models.js": {
+      "maxDuration": 15
     }
   },
   "routes": [
@@ -58,6 +64,14 @@
     {
       "src": "/api/health",
       "dest": "/api/health.js"
+    },
+    {
+      "src": "/api/image-edit",
+      "dest": "/api/image-edit.js"
+    },
+    {
+      "src": "/api/image-models",
+      "dest": "/api/image-models.js"
     }
   ]
 }

@@ -12,6 +12,11 @@ Des **routes vocales** (additives, sans toucher au chat) complètent l'API :
 `/api/voice` (audio → texte → réponse → voix) et `/api/voices`. Voir la section
 [🎙️ Routes vocales](#-routes-vocales--api-tts-api-stt-api-voice).
 
+Des **routes d'édition d'image** (additives, fournisseur **Magic Hour**) sont
+aussi disponibles : `/api/image-edit` (retoucher/modifier une image à partir d'un
+prompt, avec des **modèles gratuits**) et `/api/image-models` (catalogue). Voir la
+section [🖼️✏️ Édition d'image](#%EF%B8%8F-édition-dimage--api-image-edit-api-image-models).
+
 > ⚠️ Projet à but éducatif. Non affilié à aichatting.net. Le backend gratuit
 > octroie ~2 messages par visiteur : l'API génère un nouveau visiteur à
 > chaque requête, ce qui la rend utilisable en continu.
@@ -424,6 +429,132 @@ Renvoie le fournisseur STT/LLM/TTS actif, **sans jamais exposer les clés**.
 > 💡 Limite Vercel : corps de requête ≤ ~4,5 Mo (environ 1 à 2 minutes d'audio
 > compressé). Pour de longs enregistrements, découper côté client.
 
+## 🖼️✏️ Édition d'image : `/api/image-edit`, `/api/image-models`
+
+> **Ajout, rien de modifié.** Ces routes s'appuient sur l'API **Magic Hour**
+> (https://docs.magichour.ai) et n'altèrent ni le chat, ni les figures, ni la
+> géométrie, ni les routes vocales. Il faut une clé `MAGIC_HOUR_API_KEY`
+> (créée sur https://magichour.ai/developer — **crédits gratuits à l'inscription**).
+
+L'édition d'image fonctionne en **job asynchrone** : on envoie l'image + un
+prompt, on reçoit un `id`, puis on interroge l'état jusqu'à `complete`.
+Deux commodités sont ajoutées par cette API : `wait=1` (attente côté serveur,
+rend la main dès que le rendu est prêt **ou** après le budget de temps) et
+`download=1` (renvoie directement l'image produite).
+
+### Modèles gratuits (« free »)
+
+Le tier gratuit de Magic Hour expose **3 modèles d'édition**, utilisables avec
+les crédits offerts à l'inscription :
+
+| Modèle | Coût | Résolutions | Images d'entrée | Idéal pour |
+|---|---|---|---|---|
+| `flux-2-klein` *(défaut)* | **5 crédits/image** | 640px, 1k, 2k | 5 | Retouche, restyle, ajout/retrait d'objets |
+| `qwen-edit` | 10 crédits/image | 640px, 1k, 2k | 2 | Inpainting guidé, suppression d'objets, fond |
+| `krea-2` | 10 crédits/image | 640px, 1k | 1 | Restyle créatif depuis une seule image |
+
+⚡ **Plan gratuit** : rester en résolution **`640px`** (défaut). Les résolutions
+`1k`/`2k`/`4k` et les modèles `nano-banana*`, `gpt-image-2*`, `seedream-*`
+**nécessitent un plan payant**. `GET /api/image-models` liste les modèles
+gratuits ; `?all=1` affiche tout le catalogue avec le drapeau `freeTier`.
+
+### `POST /api/image-edit` — modifier une image
+
+L'image peut venir de **4 façons** : fichier multipart, base64/data-URI, URL
+publique, ou `file_path` Magic Hour existant.
+
+```bash
+# 1) Fichier local (multipart) — le plus simple
+curl -X POST https://<projet>.vercel.app/api/image-edit \
+  -F "image=@photo.jpg" \
+  -F "prompt=Ajoute des lunettes de soleil" \
+  -F "model=flux-2-klein" -F "resolution=640px"
+
+# 2) JSON base64 / data-URI
+curl -X POST https://<projet>.vercel.app/api/image-edit \
+  -H "Content-Type: application/json" \
+  -d '{"image":"data:image/jpeg;base64,…","prompt":"Retire le filigrane","wait":true}'
+
+# 3) Image déjà hébergée (URL publique avec extension, HTTPS)
+curl -X POST https://<projet>.vercel.app/api/image-edit \
+  -H "Content-Type: application/json" \
+  -d '{"image_url":"https://exemple.com/photo.png","prompt":"Change le fond en ciel bleu"}'
+
+# 4) Corps brut image/* (prompt en query)
+curl -X POST "https://<projet>.vercel.app/api/image-edit?prompt=Colorise" \
+  -H "Content-Type: image/png" --data-binary @photo.png
+```
+
+Paramètres : `prompt` (**requis**), `image`/`image_url`/`image_paths`, plus
+`model`, `resolution`, `aspect_ratio`, `image_count` (1, 4, 9, 16), `name`,
+`wait` (`1`/`true`). Réponse **sans** `wait` (rendu asynchrone) :
+
+```json
+{
+  "success": true,
+  "id": "cuid-example",
+  "status": "queued",
+  "pending": true,
+  "model": "flux-2-klein",
+  "resolution": "640px",
+  "creditsCharged": 5,
+  "poll": "/api/image-edit?id=cuid-example"
+}
+```
+
+Avec `wait=1`, la réponse contient l'état final (`status: "complete"`) et les
+`downloads`. Si le rendu n'est pas terminé dans le budget (`IMAGE_EDIT_WAIT_MS`,
+40 s par défaut), l'API renvoie `pending: true` : il suffit de re-sonder `poll`.
+
+### `GET /api/image-edit?id=…` — état, attente et téléchargement
+
+```bash
+# état brut
+curl "https://<projet>.vercel.app/api/image-edit?id=cuid-example"
+
+# attendre la fin côté serveur (jusqu'au budget)
+curl "https://<projet>.vercel.app/api/image-edit?id=cuid-example&wait=1"
+
+# l'image produite en base64 (JSON)…
+curl "https://<projet>.vercel.app/api/image-edit?id=cuid-example&download=1"
+
+# …ou directement en binaire PNG/JPEG
+curl "https://<projet>.vercel.app/api/image-edit?id=cuid-example&download=1&format=image" -o resultat.png
+```
+
+Statuts Magic Hour : `queued` → `rendering` → `complete` (`error`/`canceled` en
+cas d'échec). En cas d'échec, le champ `error` détaille le motif et les crédits
+sont remboursés par Magic Hour.
+
+### `GET /api/image-models` — catalogue
+
+```bash
+curl "https://<projet>.vercel.app/api/image-models"        # modèles gratuits
+curl "https://<projet>.vercel.app/api/image-models?all=1"  # tout le catalogue
+```
+
+### Configuration de l'édition d'image
+
+| Variable | Rôle |
+|---|---|
+| `MAGIC_HOUR_API_KEY` | **Requise** pour `/api/image-edit`. Clé Magic Hour (crédits gratuits) |
+| `IMAGE_EDIT_PROVIDER` | `magichour` \| `mock` (auto : `magichour` si la clé est présente) |
+| `IMAGE_EDIT_MODEL` | Modèle par défaut (défaut `flux-2-klein`, gratuit) |
+| `IMAGE_EDIT_RESOLUTION` | Résolution par défaut (défaut `640px`, gratuite) |
+| `IMAGE_EDIT_ASPECT_RATIO` | Format par défaut (défaut `auto`) |
+| `IMAGE_EDIT_WAIT_MS` / `IMAGE_EDIT_POLL_MS` | Budget du mode `wait` / intervalle de sondage |
+| `IMAGE_EDIT_TIMEOUT_MS` | Délai maximal d'un appel Magic Hour (défaut 45 s) |
+| `IMAGE_EDIT_MAX_BYTES` | Taille maximale d'une image (défaut ~4,5 Mo, plafond Vercel) |
+
+> 💡 Le corps de requête Vercel est limité à ~4,5 Mo : pour de grandes images,
+> préférez une **URL publique** (`image_url`) — Magic Hour la télécharge lui-même
+> (formats : png, jpg/jpeg, webp, heic/heif, avif, bmp, tiff…).
+>
+> ℹ️ L'endpoint `ai-image-editor` de Magic Hour n'accepte **pas de masque**
+> (`assets.image_file_paths` uniquement) : l'édition est guidée par le prompt.
+> L'upload d'un fichier local se fait en deux temps (URL pré-signée + `PUT`),
+> géré automatiquement par `lib/magichour.js`.
+
 ## ⏱️ Budget de temps (pourquoi l'API ne reste jamais bloquée)
 
 Une fonction Vercel de ce projet est coupée à **60 s** (`maxDuration` dans
@@ -530,7 +661,9 @@ npx vercel --prod
 ```
 
 `vercel.json` configure les routes `/api/chat` (vers `api/chat.js`, `maxDuration` 60 s)
-et `/api/plot` + `/api/figure` (vers `api/plot.js`, `maxDuration` 10 s).
+et `/api/plot` + `/api/figure` (vers `api/plot.js`, `maxDuration` 10 s), ainsi que
+les routes vocales et d'édition d'image (`/api/image-edit` vers `api/image-edit.js`,
+60 s ; `/api/image-models` vers `api/image-models.js`, 15 s).
 
 ## Test en local
 
@@ -539,6 +672,11 @@ npm start
 curl "http://localhost:3000/api/chat?prompt=bonjour&model=gpt-5.6-luna&uid=123"
 curl "http://localhost:3000/api/plot?expression=x-2ln(x)"
 curl "http://localhost:3000/api/plot?expression=sin(x)&format=svg"
+
+# Édition d'image (nécessite MAGIC_HOUR_API_KEY ; ou IMAGE_EDIT_PROVIDER=mock) :
+curl -X POST http://localhost:3000/api/image-edit \
+  -F "image=@photo.jpg" -F "prompt=Ajoute des lunettes de soleil"
+curl "http://localhost:3000/api/image-models"
 ```
 
 ## Tests automatisés
@@ -548,6 +686,7 @@ node test.js          # teste la liste FREE_MODELS (gratuits)
 node test.js --all    # inclut les modèles PRO (réponse attendue : message PRO)
 node test-plot.js     # teste le moteur de figures (parser, domaine auto, SVG)
 node test-voice.js    # teste les routes vocales (npm run test:voice)
+node test-image-edit.js # teste l'édition d'image hors ligne, sans clé (npm run test:image)
 ```
 
 ## Structure
@@ -561,6 +700,8 @@ api/stt.js         → fonction serverless Vercel (POST /api/stt — audio → t
 api/voice.js       → fonction serverless Vercel (POST /api/voice — STT → LLM → TTS)
 api/voices.js      → fonction serverless Vercel (GET /api/voices — liste des voix Edge)
 api/health.js      → fonction serverless Vercel (GET /api/health — état des fournisseurs)
+api/image-edit.js  → fonction serverless Vercel (POST|GET /api/image-edit — édition d'image Magic Hour)
+api/image-models.js→ fonction serverless Vercel (GET /api/image-models — catalogue des modèles)
 lib/handler.js     → logique HTTP commune de /api/chat (CORS, GET, POST JSON, erreurs)
 lib/plot.js        → moteur de courbes : parser d'expressions, échantillonnage, SVG (zéro dépendance)
 lib/figures-ai.js  → génération de figures par IA : prompt, extraction/assainissement/validation SVG, retries visiteur neuf
@@ -570,13 +711,16 @@ lib/geo-handler.js → logique HTTP commune de /api/geo
 lib/edge-tts.js    → synthèse vocale Edge (réessais, délai max, cache des voix, validation)
 lib/providers.js   → fournisseurs STT (Whisper) et LLM (Groq / OpenAI / endpoint de chat libre)
 lib/http.js        → utilitaires HTTP (CORS, corps JSON/brut/multipart, réponses, erreurs typées)
-lib/route.js       → enveloppe commune des routes vocales (CORS + préflight + API_KEY + erreurs)
+lib/route.js       → enveloppe commune des routes additives (CORS + préflight + API_KEY + erreurs)
 lib/tts-handler.js · lib/stt-handler.js · lib/voice-handler.js · lib/meta-handler.js → logique des routes vocales
+lib/magichour.js   → client Magic Hour (upload pré-signé, création d'édition, statut/poll, téléchargement, mode mock)
+lib/image-handler.js → logique des routes /api/image-edit (POST création, GET statut/téléchargement) et /api/image-models
 lib/aichatting.js  → client du backend aichatting (vToken RSA, conversation, SSE, vision, chatReliable)
-server.js          → serveur local de test (zéro dépendance) — routes chat + plot + geo + voix
+server.js          → serveur local de test (zéro dépendance) — routes chat + plot + geo + voix + image
 test.js            → test automatisé des modèles + vision (node test.js --vision)
 test-plot.js       → test automatisé du moteur de courbes (node test-plot.js)
 test-geo.js        → test automatisé du moteur géométrique (node test-geo.js)
 test-voice.js      → test automatisé des routes vocales (node test-voice.js)
+test-image-edit.js → test automatisé des routes d'édition d'image (hors ligne, mode mock)
 vercel.json        → configuration Vercel (routes + maxDuration)
 ```

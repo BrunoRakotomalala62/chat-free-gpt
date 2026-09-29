@@ -24,6 +24,13 @@ const voiceRoutes = {
   "/api/health": require("./api/health"),
 };
 
+// Routes d'édition d'image Magic Hour (additif) — mêmes wrappers que les
+// fonctions Vercel, la logique du chat reste inchangée.
+const imageRoutes = {
+  "/api/image-edit": require("./api/image-edit"),
+  "/api/image-models": require("./api/image-models"),
+};
+
 const PORT = process.env.PORT || 3000;
 
 const server = http.createServer((req, res) => {
@@ -69,6 +76,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Routes d'édition d'image (additif) — la logique du chat ci-dessous est inchangée.
+  const imageRoute = imageRoutes[pathname] || imageRoutes[pathname.replace(/\/+$/, "")];
+  if (imageRoute) {
+    Promise.resolve(imageRoute(req, res)).catch((err) => {
+      const message = String(err && err.message ? err.message : err);
+      try {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ success: false, error: message }));
+      } catch (e) {
+        /* socket déjà fermé */
+      }
+    });
+    return;
+  }
+
   handleChatRequest(req, res).catch((err) => {
     const message = String(err && err.message ? err.message : err);
     try {
@@ -88,4 +110,7 @@ server.listen(PORT, () => {
   console.log(`Géométrie : GET http://localhost:${PORT}/api/geo?text=Soit%20A%20et%20B%20deux%20points.%201)%20Tracer%20(AB).`);
   console.log(`Voix  : GET  http://localhost:${PORT}/api/tts?text=Bonjour&voice=fr-FR-DeniseNeural`);
   console.log(`Voix  : POST http://localhost:${PORT}/api/voice  (multipart { audio } -> transcript + réponse + MP3)`);
+  console.log(`Image : POST http://localhost:${PORT}/api/image-edit  (multipart { image, prompt } -> édition Magic Hour)`);
+  console.log(`Image : GET  http://localhost:${PORT}/api/image-edit?id=...  (état + ?download=1)`);
+  console.log(`Image : GET  http://localhost:${PORT}/api/image-models  (modèles gratuits)`);
 });

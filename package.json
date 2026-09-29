@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test.js",
-    "test:voice": "node test-voice.js"
+    "test:voice": "node test-voice.js",
+    "test:image": "node test-image-edit.js"
   },
   "engines": {
     "node": ">=18"
